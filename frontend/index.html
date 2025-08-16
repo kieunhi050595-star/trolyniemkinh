@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trợ lý</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Quicksand:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- === PWA / MOBILE META TAGS === -->
+    <meta name="theme-color" content="#A1887F"/>
+    <link rel="apple-touch-icon" href="https://placehold.co/192x192/A1887F/FFFFFF?text=NNN">
+    <link rel="manifest" href="manifest.json">
+    <!-- ============================== -->
+
+    <style>
+        /* CSS tùy chỉnh */
+        html, body {
+            overflow: hidden; /* Ngăn cuộn toàn bộ trang */
+            font-family: 'Quicksand', sans-serif; 
+            background-color: #F5F5DC;
+        }
+        .font-title { 
+            font-family: 'Playfair Display', serif; 
+        }
+        #chat-messages::-webkit-scrollbar { 
+            width: 8px; 
+        }
+        #chat-messages::-webkit-scrollbar-track { 
+            background: #EFEBE9; 
+        }
+        #chat-messages::-webkit-scrollbar-thumb { 
+            background: #A1887F; 
+            border-radius: 4px; 
+        }
+        #chat-messages::-webkit-scrollbar-thumb:hover { 
+            background: #8D6E63; 
+        }
+        .message-bubble p {
+            font-size: 18px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body class="bg-stone-100 text-stone-800">
+
+    <!-- Container chính chiếm toàn bộ màn hình, sử dụng biến --app-height để tương thích mobile -->
+    <div class="w-screen flex flex-col bg-white" style="height: var(--app-height, 100vh);">
+        
+        <!-- Header của ứng dụng -->
+        <div class="text-center py-4 border-b border-stone-200 shadow-sm flex-shrink-0">
+            <h1 class="font-title text-2xl md:text-3xl font-bold text-amber-800">TRỢ LÝ</h1>
+            <p class="text-stone-500 text-sm mt-1">Trợ lý giải đáp</p>
+        </div>
+
+        <!-- Khu vực hiển thị tin nhắn -->
+        <div id="chat-messages" class="flex-1 p-4 md:p-6 overflow-y-auto bg-stone-50">
+            <!-- Tin nhắn sẽ được thêm bằng JavaScript -->
+        </div>
+
+        <!-- Form nhập liệu được cố định ở dưới cùng -->
+        <div class="p-4 bg-white border-t border-stone-200 shadow-inner flex-shrink-0">
+            <div class="flex items-center bg-stone-100 rounded-full p-2">
+                <input type="text" id="user-input" placeholder="Đang chuẩn bị..." class="flex-1 bg-transparent px-4 py-2 text-stone-700 text-lg focus:outline-none" autocomplete="off" disabled>
+                <button id="send-button" class="bg-amber-700 hover:bg-amber-800 text-white w-12 h-12 rounded-full transition duration-300 flex items-center justify-center disabled:opacity-50 disabled:bg-stone-400 flex-shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"></path><path d="M22 2L15 22l-4-9-9-4 22-2z"></path></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- SỬA LỖI CHIỀU CAO TRÊN MOBILE ---
+        const setAppHeight = () => {
+            document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`);
+        }
+        window.addEventListener('resize', setAppHeight);
+        setAppHeight();
+        // --- KẾT THÚC SỬA LỖI ---
+
+        // --- PWA SERVICE WORKER REGISTRATION ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').then(registration => {
+                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                }, err => {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+            });
+        }
+        // --- END PWA ---
+
+        // === THÔNG TIN CẤU HÌNH QUAN TRỌNG ===
+        const BACKEND_API_URL = "https://trolyngoinhanho.onrender.com";
+        const DEFAULT_DOCUMENT_URL = "niemkinh.txt";
+        let documentContext = "";
+        // ===================================
+
+        const chatMessages = document.getElementById('chat-messages');
+        const userInput = document.getElementById('user-input');
+        const sendButton = document.getElementById('send-button');
+
+        window.addEventListener('load', async () => {
+            addMessage('Đang chuẩn bị...', 'bot', 'info');
+            try {
+                const response = await fetch(DEFAULT_DOCUMENT_URL);
+                if (!response.ok) {
+                    throw new Error(`Không thể tải tệp (status: ${response.status})`);
+                }
+                documentContext = await response.text();
+                addMessage('Đệ chào Sư huynh ! Sư huynh cứ đặt câu hỏi ạ?', 'bot');
+                userInput.disabled = false;
+                userInput.placeholder = "Nhập câu hỏi của bạn...";
+            } catch (error) {
+                console.error("Lỗi khi tải tài liệu mặc định:", error);
+                addMessage(`Lỗi khi tải tài liệu: ${error.message}`, 'bot', 'error');
+                userInput.placeholder = "Tải tài liệu thất bại!";
+            }
+        });
+
+        function addMessage(message, sender, type = 'normal') {
+            const messageWrapper = document.createElement('div');
+            messageWrapper.classList.add('message', 'mb-4', 'flex', 'w-full');
+            
+            const messageBubble = document.createElement('div');
+            messageBubble.classList.add('message-bubble', 'rounded-xl', 'p-4', 'max-w-xl', 'shadow-md');
+
+            if (sender === 'user') {
+                messageWrapper.classList.add('justify-end');
+                messageBubble.classList.add('bg-amber-600', 'text-white');
+            } else {
+                messageWrapper.classList.add('justify-start');
+                if (type === 'error') {
+                    messageBubble.classList.add('bg-red-800', 'text-white');
+                } else if (type === 'info') {
+                    messageBubble.classList.add('bg-stone-200', 'text-stone-500', 'text-center', 'w-full', 'max-w-full', 'shadow-none');
+                } else {
+                    messageBubble.classList.add('bg-stone-200', 'text-stone-800');
+                }
+            }
+
+            messageBubble.innerHTML = `<p>${message.replace(/\n/g, '<br>')}</p>`;
+            messageWrapper.appendChild(messageBubble);
+            chatMessages.appendChild(messageWrapper);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        async function callBackendAPI(question, context) {
+            if (BACKEND_API_URL === "URL_CUA_RENDER_SE_DAT_O_DAY") {
+                throw new Error("Lỗi cấu hình: URL của backend chưa được thiết lập.");
+            }
+            const response = await fetch(`${BACKEND_API_URL}/api/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    question: question,
+                    context: context
+                })
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`Lỗi từ server: ${errorData.error || response.statusText}`);
+            }
+            const result = await response.json();
+            return result.answer;
+        }
+
+        async function handleSendMessage() {
+            const userQuestion = userInput.value.trim();
+            if (!userQuestion) return;
+            
+            if (!documentContext) {
+                addMessage("Lỗi: Tài liệu chưa được tải xong hoặc tải thất bại.", 'bot', 'error');
+                return;
+            }
+
+            addMessage(userQuestion, 'user');
+            userInput.value = '';
+            sendButton.disabled = true;
+            sendButton.innerHTML = '<div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>'; // Loading spinner
+
+            try {
+                const answer = await callBackendAPI(userQuestion, documentContext);
+                addMessage(answer, 'bot');
+            } catch (error) {
+                console.error("Lỗi chi tiết:", error);
+                addMessage(error.message, 'bot', 'error');
+            } finally {
+                sendButton.disabled = false;
+                sendButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"></path><path d="M22 2L15 22l-4-9-9-4 22-2z"></path></svg>';
+            }
+        }
+
+        sendButton.addEventListener('click', handleSendMessage);
+        userInput.addEventListener('keydown', (event) => { 
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault(); // Ngăn xuống dòng khi nhấn Enter
+                handleSendMessage();
+            }
+        });
+        userInput.addEventListener('input', () => { 
+            sendButton.disabled = userInput.value.trim().length === 0 || !documentContext; 
+        });
+    </script>
+</body>
+</html>

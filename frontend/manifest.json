@@ -1,0 +1,21 @@
+{
+  "name": "Trợ lý Ngôi Nhà Nhỏ",
+  "short_name": "Trợ lý NNN",
+  "description": "Trợ lý hỏi đáp về Ngôi Nhà Nhỏ, có thể cài đặt trên mọi thiết bị.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#FDFDFD",
+  "theme_color": "#A1887F",
+  "icons": [
+    {
+      "src": "192dp.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "512dp.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}

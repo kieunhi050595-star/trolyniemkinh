@@ -229,6 +229,7 @@
 
             try {
                 const answer = await callBackendAPI(userQuestion, documentContext);
+                console.log("Dữ liệu gốc từ API:", answer);
                 addMessage(answer, 'bot');
             } catch (error) {
                 console.error("Lỗi chi tiết:", error);

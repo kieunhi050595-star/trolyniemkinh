@@ -41,32 +41,32 @@
         .message-bubble p {
             font-size: 18px;
             line-height: 1.6;
-            word-break: break-word; /* Thêm thuộc tính này để link dài không làm vỡ layout */
+            word-break: break-word; /* Để link dài không làm vỡ layout */
         }
     </style>
 </head>
 <body class="bg-stone-100 text-stone-800">
 
-    <!-- Container chính chiếm toàn bộ màn hình, sử dụng biến --app-height để tương thích mobile -->
+    <!-- Container chính -->
     <div class="w-screen flex flex-col bg-white" style="height: var(--app-height, 100vh);">
         
-        <!-- Header của ứng dụng -->
+        <!-- Header -->
         <div class="text-center py-4 border-b border-stone-200 shadow-sm flex-shrink-0">
             <h1 class="font-title text-2xl md:text-3xl font-bold text-amber-800">TRỢ LÝ</h1>
             <p class="text-stone-500 text-sm mt-1">Trợ lý giải đáp</p>
         </div>
 
-        <!-- Khu vực hiển thị tin nhắn -->
+        <!-- Khu vực tin nhắn -->
         <div id="chat-messages" class="flex-1 p-4 md:p-6 overflow-y-auto bg-stone-50">
             <!-- Tin nhắn sẽ được thêm bằng JavaScript -->
         </div>
 
-        <!-- Form nhập liệu được cố định ở dưới cùng -->
+        <!-- Form nhập liệu -->
         <div class="p-4 bg-white border-t border-stone-200 shadow-inner flex-shrink-0">
             <div class="flex items-center bg-stone-100 rounded-full p-2">
                 <input type="text" id="user-input" placeholder="Đang chuẩn bị..." class="flex-1 bg-transparent px-4 py-2 text-stone-700 text-lg focus:outline-none" autocomplete="off" disabled>
                 <button id="send-button" class="bg-amber-700 hover:bg-amber-800 text-white w-12 h-12 rounded-full transition duration-300 flex items-center justify-center disabled:opacity-50 disabled:bg-stone-400 flex-shrink-0">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"></path><path d="M22 2L15 22l-4-9-9-4 22-2z"></path></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"></path><path d="M22 2L15 22l-4-9-9-4 22-2z"></path></svg>
                 </button>
             </div>
         </div>
@@ -121,52 +121,50 @@
             }
         });
 
-        // --- START: HÀM NÀY ĐÃ ĐƯỢC CẬP NHẬT HOÀN TOÀN ---
         /**
-         * Hàm chuyển đổi URL trong văn bản thành thẻ <a> có thể nhấp.
-         * Phương pháp này an toàn và đáng tin cậy hơn bằng cách xây dựng các phần tử DOM
-         * thay vì thay thế chuỗi, tránh được các lỗi phân tích cú pháp HTML.
-         * @param {string} text - Chuỗi văn bản đầu vào.
-         * @returns {string} - Chuỗi HTML đã được xử lý với các liên kết.
+         * Hàm xử lý văn bản và link một cách an toàn nhất.
+         * Nó sẽ phân tách văn bản và link, sau đó tạo các phần tử HTML
+         * một cách tường minh để đảm bảo link luôn bấm được.
+         * @param {string} text - Văn bản đầu vào từ bot.
+         * @param {HTMLElement} parentElement - Phần tử <p> để chèn nội dung vào.
          */
-        function linkify(text) {
-            if (typeof text !== 'string') return '';
+        function processAndAppendText(text, parentElement) {
+            if (typeof text !== 'string') {
+                parentElement.textContent = String(text);
+                return;
+            }
 
-            const urlRegex = /((?:https?:\/\/|www\.)[^\s<>"'.,;:)\]]+)/;
-            const parts = text.split(urlRegex);
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            let lastIndex = 0;
+            let match;
 
-            const fragment = document.createDocumentFragment();
-
-            parts.forEach((part, index) => {
-                if (!part) return;
-
-                if (index % 2 === 1) { // Đây là một URL
-                    const url = part;
-                    const properUrl = url.startsWith('www.') ? 'http://' + url : url;
-                    
-                    const a = document.createElement('a');
-                    a.href = properUrl;
-                    a.target = '_blank';
-                    a.rel = 'noopener noreferrer';
-                    a.className = 'text-blue-600 hover:underline font-semibold';
-                    a.textContent = url; // Sử dụng textContent để chèn văn bản một cách an toàn
-                    fragment.appendChild(a);
-                } else { // Đây là văn bản thường
-                    const textParts = part.split('\n');
-                    textParts.forEach((textPart, i) => {
-                        fragment.appendChild(document.createTextNode(textPart));
-                        if (i < textParts.length - 1) {
-                            fragment.appendChild(document.createElement('br'));
-                        }
-                    });
+            while ((match = urlRegex.exec(text)) !== null) {
+                // Thêm phần văn bản trước link
+                const textBefore = text.substring(lastIndex, match.index);
+                if (textBefore) {
+                    parentElement.appendChild(document.createTextNode(textBefore));
                 }
-            });
 
-            const tempDiv = document.createElement('div');
-            tempDiv.appendChild(fragment);
-            return tempDiv.innerHTML;
+                // Tạo và thêm thẻ <a> cho link
+                const url = match[0];
+                const a = document.createElement('a');
+                a.href = url;
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                a.className = 'text-blue-600 hover:underline font-semibold';
+                a.textContent = url;
+                parentElement.appendChild(a);
+
+                lastIndex = urlRegex.lastIndex;
+            }
+
+            // Thêm phần văn bản còn lại sau link cuối cùng
+            const textAfter = text.substring(lastIndex);
+            if (textAfter) {
+                parentElement.appendChild(document.createTextNode(textAfter));
+            }
         }
-        // --- END: HÀM NÀY ĐÃ ĐƯỢC CẬP NHẬT HOÀN TOÀN ---
+
 
         function addMessage(message, sender, type = 'normal') {
             const messageWrapper = document.createElement('div');
@@ -189,18 +187,25 @@
                 }
             }
 
-            // Sử dụng hàm linkify mới và đáng tin cậy để xử lý tin nhắn.
-            messageBubble.innerHTML = `<p>${linkify(message)}</p>`;
+            // Tạo một thẻ <p> để chứa nội dung
+            const contentP = document.createElement('p');
 
+            // Thay thế các ký tự xuống dòng bằng thẻ <br> một cách an toàn
+            const lines = message.split('\n');
+            lines.forEach((line, index) => {
+                processAndAppendText(line, contentP);
+                if (index < lines.length - 1) {
+                    contentP.appendChild(document.createElement('br'));
+                }
+            });
+
+            messageBubble.appendChild(contentP);
             messageWrapper.appendChild(messageBubble);
             chatMessages.appendChild(messageWrapper);
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
         async function callBackendAPI(question, context) {
-            if (BACKEND_API_URL === "URL_CUA_RENDER_SE_DAT_O_DAY") {
-                throw new Error("Lỗi cấu hình: URL của backend chưa được thiết lập.");
-            }
             const response = await fetch(`${BACKEND_API_URL}/api/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -221,32 +226,35 @@
             const userQuestion = userInput.value.trim();
             if (!userQuestion) return;
             
-            if (!documentContext) {
-                addMessage("Lỗi: Tài liệu chưa được tải xong hoặc tải thất bại.", 'bot', 'error');
-                return;
-            }
-
             addMessage(userQuestion, 'user');
             userInput.value = '';
             sendButton.disabled = true;
-            sendButton.innerHTML = '<div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>'; // Loading spinner
+            sendButton.innerHTML = '<div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>';
 
             try {
                 const answer = await callBackendAPI(userQuestion, documentContext);
+                
+                // --- CÔNG CỤ GỠ LỖI ---
+                // Dòng này sẽ in ra nội dung chính xác mà server trả về
+                console.log("--- DỮ LIỆU TỪ SERVER ---");
+                console.log(answer);
+                console.log("--- KẾT THÚC DỮ LIỆU ---");
+                // -------------------------
+
                 addMessage(answer, 'bot');
             } catch (error) {
                 console.error("Lỗi chi tiết:", error);
                 addMessage(error.message, 'bot', 'error');
             } finally {
                 sendButton.disabled = false;
-                sendButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"></path><path d="M22 2L15 22l-4-9-9-4 22-2z"></path></svg>';
+                sendButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"></path><path d="M22 2L15 22l-4-9-9-4 22-2z"></path></svg>';
             }
         }
 
         sendButton.addEventListener('click', handleSendMessage);
         userInput.addEventListener('keydown', (event) => { 
             if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault(); // Ngăn xuống dòng khi nhấn Enter
+                event.preventDefault();
                 handleSendMessage();
             }
         });

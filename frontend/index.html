@@ -43,6 +43,15 @@
             line-height: 1.6;
             word-break: break-word; /* Để link dài không làm vỡ layout */
         }
+        /* START: CSS ĐỂ GIẢI QUYẾT DỨT ĐIỂM VẤN ĐỀ POPUP */
+        /* Quy tắc này có độ ưu tiên rất cao, đảm bảo mọi link bên trong
+           bong bóng chat sẽ luôn có màu xanh và gạch chân. */
+        .message-bubble a {
+            color: #2563eb !important;
+            text-decoration: underline !important;
+            font-weight: 600 !important;
+        }
+        /* END: CSS ĐỂ GIẢI QUYẾT DỨT ĐIỂM VẤN ĐỀ POPUP */
     </style>
 </head>
 <body class="bg-stone-100 text-stone-800">
@@ -103,7 +112,7 @@
         const userInput = document.getElementById('user-input');
         const sendButton = document.getElementById('send-button');
 
-        // --- START: CẬP NHẬT CUỐI CÙNG ĐỂ SỬA LỖI POPUP ---
+        // --- Bắt sự kiện click để mở link trong tab mới ---
         chatMessages.addEventListener('click', function(event) {
             const linkElement = event.target.closest('a');
             if (linkElement) {
@@ -114,8 +123,6 @@
                 }
             }
         });
-        // --- END: CẬP NHẬT CUỐI CÙNG ĐỂ SỬA LỖI POPUP ---
-
 
         window.addEventListener('load', async () => {
             addMessage('Đang chuẩn bị...', 'bot', 'info');
@@ -136,7 +143,7 @@
         });
 
         /**
-         * Hàm xử lý link và văn bản một cách an toàn và dứt điểm.
+         * Hàm xử lý link và văn bản.
          * @param {string} text - Văn bản đầu vào.
          * @returns {string} - Chuỗi HTML đã được xử lý.
          */
@@ -147,10 +154,9 @@
                 const tempLine = document.createElement('div');
                 tempLine.textContent = line;
                 const urlRegex = /(https?:\/\/[^\s<>"']+)/g;
-                // SỬA LỖI: Sử dụng inline style với !important để đảm bảo link luôn có màu xanh và gạch chân.
+                // Không cần inline style nữa vì đã có CSS ở trên
                 return tempLine.innerHTML.replace(urlRegex, (url) => {
-                    const style = "color: #2563eb !important; text-decoration: underline !important; font-weight: 600 !important;";
-                    return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="${style}">${url}</a>`;
+                    return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
                 });
             }).join('<br>');
         }

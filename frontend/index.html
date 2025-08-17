@@ -103,20 +103,29 @@
         const userInput = document.getElementById('user-input');
         const sendButton = document.getElementById('send-button');
 
-        // --- START: MÃ NGUỒN MỚI ĐỂ SỬA LỖI POPUP ---
-        // Đoạn mã này sẽ lắng nghe tất cả các sự kiện click trong khu vực tin nhắn.
-        // Nếu phần tử được click là một thẻ <a> (đường link), nó sẽ chủ động
-        // mở link đó trong một tab mới. Cách này hoạt động ổn định hơn trong popup.
+        // --- START: CẬP NHẬT CUỐI CÙNG ĐỂ SỬA LỖI POPUP ---
         chatMessages.addEventListener('click', function(event) {
-            if (event.target.tagName === 'A') {
-                event.preventDefault(); // Ngăn hành vi mặc định
-                const url = event.target.href;
+            // Tìm phần tử <a> gần nhất với nơi người dùng đã click.
+            // Cách này đáng tin cậy hơn là chỉ kiểm tra event.target,
+            // vì người dùng có thể click vào một phần tử con bên trong link.
+            const linkElement = event.target.closest('a');
+
+            // Nếu tìm thấy một link
+            if (linkElement) {
+                // Ngăn trình duyệt thực hiện hành vi mặc định (là điều hướng trang).
+                // Điều này rất quan trọng khi chatbot nằm trong iframe/popup.
+                event.preventDefault();
+                
+                const url = linkElement.href;
                 if (url) {
+                    // Sử dụng window.open để mở link trong một tab mới.
+                    // Đây là cách đáng tin cậy nhất để thoát khỏi môi trường popup.
                     window.open(url, '_blank', 'noopener,noreferrer');
                 }
             }
         });
-        // --- END: MÃ NGUỒN MỚI ĐỂ SỬA LỖI POPUP ---
+        // --- END: CẬP NHẬT CUỐI CÙNG ĐỂ SỬA LỖI POPUP ---
+
 
         window.addEventListener('load', async () => {
             addMessage('Đang chuẩn bị...', 'bot', 'info');

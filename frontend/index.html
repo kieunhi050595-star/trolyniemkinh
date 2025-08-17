@@ -94,7 +94,7 @@
         // --- END PWA ---
 
         // === THÔNG TIN CẤU HÌNH QUAN TRỌNG ===
-        const BACKEND_API_URL = "https://trolyniemkinh.onrender.com";
+        const BACKEND_API_URL = "https://trolyniemkinh.onrender.com/";
         const DEFAULT_DOCUMENT_URL = "niemkinh.txt";
         let documentContext = "";
         // ===================================
@@ -122,26 +122,40 @@
         });
 
         /**
-         * Hàm xử lý link và văn bản một cách an toàn.
+         * Hàm xử lý link và văn bản một cách an toàn và dứt điểm.
          * @param {string} text - Văn bản đầu vào.
          * @returns {string} - Chuỗi HTML đã được xử lý.
          */
         function linkifyAndSanitize(text) {
             if (typeof text !== 'string') return '';
 
-            // 1. Chuyển đổi các ký tự HTML đặc biệt thành an toàn
+            // --- BƯỚC 1: LÀM SẠCH VÀ CHUẨN HÓA ---
+            // Thay thế các ký tự khoảng trắng không chuẩn (như non-breaking space) bằng dấu cách thường.
+            // Đây là bước quan trọng nhất để giải quyết vấn đề.
+            const cleanedText = text.replace(/[\s\u00A0]+/g, ' ').trim();
+
+            // --- BƯỚC 2: CHUYỂN ĐỔI AN TOÀN SANG HTML ---
+            // Dùng textContent để vô hiệu hóa mọi mã HTML độc hại có thể có trong văn bản.
             const temp = document.createElement('div');
-            temp.textContent = text;
+            temp.textContent = cleanedText;
             let sanitizedText = temp.innerHTML;
 
-            // 2. Tìm và thay thế URL bằng thẻ <a>
+            // --- BƯỚC 3: TÌM VÀ TẠO LINK ---
+            // Regex này tìm các URL một cách chính xác.
             const urlRegex = /(https?:\/\/[^\s<>"']+)/g;
             const linkedText = sanitizedText.replace(urlRegex, (url) => {
                 return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-semibold">${url}</a>`;
             });
 
-            // 3. Thay thế ký tự xuống dòng bằng <br>
-            return linkedText.replace(/\n/g, '<br>');
+            // --- BƯỚC 4: XỬ LÝ XUỐNG DÒNG ---
+            // Dùng lại văn bản gốc để xử lý xuống dòng cho chính xác.
+            return text.split('\n').map(line => {
+                const tempLine = document.createElement('div');
+                tempLine.textContent = line;
+                return tempLine.innerHTML.replace(urlRegex, (url) => {
+                    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-semibold">${url}</a>`;
+                });
+            }).join('<br>');
         }
 
         function addMessage(message, sender, type = 'normal') {
@@ -160,20 +174,13 @@
                     messageBubble.classList.add('bg-red-800', 'text-white');
                 } else if (type === 'info') {
                     messageBubble.classList.add('bg-stone-200', 'text-stone-500', 'text-center', 'w-full', 'max-w-full', 'shadow-none');
-                } else if (type === 'debug') { // Thêm style cho tin nhắn debug
-                    messageBubble.classList.add('bg-gray-700', 'text-white', 'font-mono', 'text-xs', 'w-full', 'max-w-full');
-                    messageBubble.style.whiteSpace = 'pre-wrap'; // Giữ nguyên khoảng trắng
                 } else {
                     messageBubble.classList.add('bg-stone-200', 'text-stone-800');
                 }
             }
 
             const contentP = document.createElement('p');
-            if (type === 'debug') {
-                contentP.textContent = message; // Hiển thị nguyên văn cho debug
-            } else {
-                contentP.innerHTML = linkifyAndSanitize(message);
-            }
+            contentP.innerHTML = linkifyAndSanitize(message);
             
             messageBubble.appendChild(contentP);
             messageWrapper.appendChild(messageBubble);
@@ -209,13 +216,6 @@
 
             try {
                 const answer = await callBackendAPI(userQuestion, documentContext);
-                
-                // --- CÔNG CỤ GỠ LỖI ---
-                // Hiển thị thông tin gỡ lỗi trực tiếp trong chat
-                const debugMessage = `--- DEBUG INFO ---\nRaw Answer: [${answer}]\nLength: ${answer.length}\nType: ${typeof answer}`;
-                addMessage(debugMessage, 'bot', 'debug');
-                // -------------------------
-
                 addMessage(answer, 'bot');
             } catch (error) {
                 console.error("Lỗi chi tiết:", error);

@@ -66,7 +66,7 @@
             <div class="flex items-center bg-stone-100 rounded-full p-2">
                 <input type="text" id="user-input" placeholder="Đang chuẩn bị..." class="flex-1 bg-transparent px-4 py-2 text-stone-700 text-lg focus:outline-none" autocomplete="off" disabled>
                 <button id="send-button" class="bg-amber-700 hover:bg-amber-800 text-white w-12 h-12 rounded-full transition duration-300 flex items-center justify-center disabled:opacity-50 disabled:bg-stone-400 flex-shrink-0">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"></path><path d="M22 2L15 22l-4-9-9-4 22-2z"></path></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"></path><path d="M22 2L15 22l-4-9-9-4 22-2z"></path></svg>
                 </button>
             </div>
         </div>
@@ -123,38 +123,48 @@
 
         // --- START: HÀM NÀY ĐÃ ĐƯỢC CẬP NHẬT HOÀN TOÀN ---
         /**
-         * A robust function to find URLs in a string and convert them to clickable HTML <a> tags.
-         * This version first sanitizes the text to prevent HTML injection and rendering issues.
-         * @param {string} text - The input string from the bot.
-         * @returns {string} - An HTML string with clickable links.
+         * Hàm chuyển đổi URL trong văn bản thành thẻ <a> có thể nhấp.
+         * Phương pháp này an toàn và đáng tin cậy hơn bằng cách xây dựng các phần tử DOM
+         * thay vì thay thế chuỗi, tránh được các lỗi phân tích cú pháp HTML.
+         * @param {string} text - Chuỗi văn bản đầu vào.
+         * @returns {string} - Chuỗi HTML đã được xử lý với các liên kết.
          */
         function linkify(text) {
-            // 1. Safety check: Ensure the input is a string.
-            if (typeof text !== 'string') {
-                return text; // Return as is if not a string.
-            }
+            if (typeof text !== 'string') return '';
 
-            // 2. Sanitize text: Create a temporary element to safely convert special characters
-            // (like <, >) into HTML entities (e.g., &lt;, &gt;). This is a crucial step
-            // to prevent the bot's response from breaking the page's HTML structure.
-            const tempDiv = document.createElement('div');
-            tempDiv.textContent = text;
-            let safeText = tempDiv.innerHTML;
+            const urlRegex = /((?:https?:\/\/|www\.)[^\s<>"'.,;:)\]]+)/;
+            const parts = text.split(urlRegex);
 
-            // 3. Convert newlines to <br> tags for proper line breaks in HTML.
-            safeText = safeText.replace(/\n/g, '<br>');
+            const fragment = document.createDocumentFragment();
 
-            // 4. Define a regular expression to find URLs (starting with http, https, or www).
-            // This regex avoids including trailing punctuation like commas or periods in the URL.
-            const urlRegex = /((?:https?:\/\/|www\.)[^\s<>"'.,;:)\]]+)/g;
+            parts.forEach((part, index) => {
+                if (!part) return;
 
-            // 5. Find all URLs in the sanitized text and replace them with <a> tags.
-            return safeText.replace(urlRegex, function(url) {
-                // If a URL starts with "www.", prepend "http://" to make it a valid href.
-                const properUrl = url.startsWith('www.') ? 'http://' + url : url;
-                // Return the complete HTML for the clickable link.
-                return `<a href="${properUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-semibold">${url}</a>`;
+                if (index % 2 === 1) { // Đây là một URL
+                    const url = part;
+                    const properUrl = url.startsWith('www.') ? 'http://' + url : url;
+                    
+                    const a = document.createElement('a');
+                    a.href = properUrl;
+                    a.target = '_blank';
+                    a.rel = 'noopener noreferrer';
+                    a.className = 'text-blue-600 hover:underline font-semibold';
+                    a.textContent = url; // Sử dụng textContent để chèn văn bản một cách an toàn
+                    fragment.appendChild(a);
+                } else { // Đây là văn bản thường
+                    const textParts = part.split('\n');
+                    textParts.forEach((textPart, i) => {
+                        fragment.appendChild(document.createTextNode(textPart));
+                        if (i < textParts.length - 1) {
+                            fragment.appendChild(document.createElement('br'));
+                        }
+                    });
+                }
             });
+
+            const tempDiv = document.createElement('div');
+            tempDiv.appendChild(fragment);
+            return tempDiv.innerHTML;
         }
         // --- END: HÀM NÀY ĐÃ ĐƯỢC CẬP NHẬT HOÀN TOÀN ---
 
@@ -179,7 +189,7 @@
                 }
             }
 
-            // Use the new robust linkify function to process the message.
+            // Sử dụng hàm linkify mới và đáng tin cậy để xử lý tin nhắn.
             messageBubble.innerHTML = `<p>${linkify(message)}</p>`;
 
             messageWrapper.appendChild(messageBubble);

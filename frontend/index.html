@@ -105,21 +105,11 @@
 
         // --- START: CẬP NHẬT CUỐI CÙNG ĐỂ SỬA LỖI POPUP ---
         chatMessages.addEventListener('click', function(event) {
-            // Tìm phần tử <a> gần nhất với nơi người dùng đã click.
-            // Cách này đáng tin cậy hơn là chỉ kiểm tra event.target,
-            // vì người dùng có thể click vào một phần tử con bên trong link.
             const linkElement = event.target.closest('a');
-
-            // Nếu tìm thấy một link
             if (linkElement) {
-                // Ngăn trình duyệt thực hiện hành vi mặc định (là điều hướng trang).
-                // Điều này rất quan trọng khi chatbot nằm trong iframe/popup.
                 event.preventDefault();
-                
                 const url = linkElement.href;
                 if (url) {
-                    // Sử dụng window.open để mở link trong một tab mới.
-                    // Đây là cách đáng tin cậy nhất để thoát khỏi môi trường popup.
                     window.open(url, '_blank', 'noopener,noreferrer');
                 }
             }
@@ -157,8 +147,10 @@
                 const tempLine = document.createElement('div');
                 tempLine.textContent = line;
                 const urlRegex = /(https?:\/\/[^\s<>"']+)/g;
+                // SỬA LỖI: Sử dụng inline style để đảm bảo link luôn có màu xanh và gạch chân.
                 return tempLine.innerHTML.replace(urlRegex, (url) => {
-                    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-semibold">${url}</a>`;
+                    const style = "color: #2563eb; text-decoration: underline; font-weight: 600;";
+                    return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="${style}">${url}</a>`;
                 });
             }).join('<br>');
         }

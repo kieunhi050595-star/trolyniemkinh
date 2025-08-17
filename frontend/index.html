@@ -66,7 +66,7 @@
             <div class="flex items-center bg-stone-100 rounded-full p-2">
                 <input type="text" id="user-input" placeholder="Đang chuẩn bị..." class="flex-1 bg-transparent px-4 py-2 text-stone-700 text-lg focus:outline-none" autocomplete="off" disabled>
                 <button id="send-button" class="bg-amber-700 hover:bg-amber-800 text-white w-12 h-12 rounded-full transition duration-300 flex items-center justify-center disabled:opacity-50 disabled:bg-stone-400 flex-shrink-0">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"></path><path d="M22 2L15 22l-4-9-9-4 22-2z"></path></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"></path><path d="M22 2L15 22l-4-9-9-4 22-2z"></path></svg>
                 </button>
             </div>
         </div>
@@ -122,49 +122,27 @@
         });
 
         /**
-         * Hàm xử lý văn bản và link một cách an toàn nhất.
-         * Nó sẽ phân tách văn bản và link, sau đó tạo các phần tử HTML
-         * một cách tường minh để đảm bảo link luôn bấm được.
-         * @param {string} text - Văn bản đầu vào từ bot.
-         * @param {HTMLElement} parentElement - Phần tử <p> để chèn nội dung vào.
+         * Hàm xử lý link và văn bản một cách an toàn.
+         * @param {string} text - Văn bản đầu vào.
+         * @returns {string} - Chuỗi HTML đã được xử lý.
          */
-        function processAndAppendText(text, parentElement) {
-            if (typeof text !== 'string') {
-                parentElement.textContent = String(text);
-                return;
-            }
+        function linkifyAndSanitize(text) {
+            if (typeof text !== 'string') return '';
 
-            const urlRegex = /(https?:\/\/[^\s]+)/g;
-            let lastIndex = 0;
-            let match;
+            // 1. Chuyển đổi các ký tự HTML đặc biệt thành an toàn
+            const temp = document.createElement('div');
+            temp.textContent = text;
+            let sanitizedText = temp.innerHTML;
 
-            while ((match = urlRegex.exec(text)) !== null) {
-                // Thêm phần văn bản trước link
-                const textBefore = text.substring(lastIndex, match.index);
-                if (textBefore) {
-                    parentElement.appendChild(document.createTextNode(textBefore));
-                }
+            // 2. Tìm và thay thế URL bằng thẻ <a>
+            const urlRegex = /(https?:\/\/[^\s<>"']+)/g;
+            const linkedText = sanitizedText.replace(urlRegex, (url) => {
+                return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-semibold">${url}</a>`;
+            });
 
-                // Tạo và thêm thẻ <a> cho link
-                const url = match[0];
-                const a = document.createElement('a');
-                a.href = url;
-                a.target = '_blank';
-                a.rel = 'noopener noreferrer';
-                a.className = 'text-blue-600 hover:underline font-semibold';
-                a.textContent = url;
-                parentElement.appendChild(a);
-
-                lastIndex = urlRegex.lastIndex;
-            }
-
-            // Thêm phần văn bản còn lại sau link cuối cùng
-            const textAfter = text.substring(lastIndex);
-            if (textAfter) {
-                parentElement.appendChild(document.createTextNode(textAfter));
-            }
+            // 3. Thay thế ký tự xuống dòng bằng <br>
+            return linkedText.replace(/\n/g, '<br>');
         }
-
 
         function addMessage(message, sender, type = 'normal') {
             const messageWrapper = document.createElement('div');
@@ -182,23 +160,21 @@
                     messageBubble.classList.add('bg-red-800', 'text-white');
                 } else if (type === 'info') {
                     messageBubble.classList.add('bg-stone-200', 'text-stone-500', 'text-center', 'w-full', 'max-w-full', 'shadow-none');
+                } else if (type === 'debug') { // Thêm style cho tin nhắn debug
+                    messageBubble.classList.add('bg-gray-700', 'text-white', 'font-mono', 'text-xs', 'w-full', 'max-w-full');
+                    messageBubble.style.whiteSpace = 'pre-wrap'; // Giữ nguyên khoảng trắng
                 } else {
                     messageBubble.classList.add('bg-stone-200', 'text-stone-800');
                 }
             }
 
-            // Tạo một thẻ <p> để chứa nội dung
             const contentP = document.createElement('p');
-
-            // Thay thế các ký tự xuống dòng bằng thẻ <br> một cách an toàn
-            const lines = message.split('\n');
-            lines.forEach((line, index) => {
-                processAndAppendText(line, contentP);
-                if (index < lines.length - 1) {
-                    contentP.appendChild(document.createElement('br'));
-                }
-            });
-
+            if (type === 'debug') {
+                contentP.textContent = message; // Hiển thị nguyên văn cho debug
+            } else {
+                contentP.innerHTML = linkifyAndSanitize(message);
+            }
+            
             messageBubble.appendChild(contentP);
             messageWrapper.appendChild(messageBubble);
             chatMessages.appendChild(messageWrapper);
@@ -235,10 +211,9 @@
                 const answer = await callBackendAPI(userQuestion, documentContext);
                 
                 // --- CÔNG CỤ GỠ LỖI ---
-                // Dòng này sẽ in ra nội dung chính xác mà server trả về
-                console.log("--- DỮ LIỆU TỪ SERVER ---");
-                console.log(answer);
-                console.log("--- KẾT THÚC DỮ LIỆU ---");
+                // Hiển thị thông tin gỡ lỗi trực tiếp trong chat
+                const debugMessage = `--- DEBUG INFO ---\nRaw Answer: [${answer}]\nLength: ${answer.length}\nType: ${typeof answer}`;
+                addMessage(debugMessage, 'bot', 'debug');
                 // -------------------------
 
                 addMessage(answer, 'bot');

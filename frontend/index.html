@@ -120,32 +120,47 @@
             }
         });
 
-        function addMessage(message, sender, type = 'normal') {
-            const messageWrapper = document.createElement('div');
-            messageWrapper.classList.add('message', 'mb-4', 'flex', 'w-full');
-            
-            const messageBubble = document.createElement('div');
-            messageBubble.classList.add('message-bubble', 'rounded-xl', 'p-4', 'max-w-xl', 'shadow-md');
+		function addMessage(message, sender, type = 'normal') {
+			const messageWrapper = document.createElement('div');
+			messageWrapper.classList.add('message', 'mb-4', 'flex', 'w-full');
+			
+			const messageBubble = document.createElement('div');
+			messageBubble.classList.add('message-bubble', 'rounded-xl', 'p-4', 'max-w-xl', 'shadow-md');
 
-            if (sender === 'user') {
-                messageWrapper.classList.add('justify-end');
-                messageBubble.classList.add('bg-amber-600', 'text-white');
-            } else {
-                messageWrapper.classList.add('justify-start');
-                if (type === 'error') {
-                    messageBubble.classList.add('bg-red-800', 'text-white');
-                } else if (type === 'info') {
-                    messageBubble.classList.add('bg-stone-200', 'text-stone-500', 'text-center', 'w-full', 'max-w-full', 'shadow-none');
-                } else {
-                    messageBubble.classList.add('bg-stone-200', 'text-stone-800');
-                }
-            }
+			if (sender === 'user') {
+				messageWrapper.classList.add('justify-end');
+				messageBubble.classList.add('bg-amber-600', 'text-white');
+			} else {
+				messageWrapper.classList.add('justify-start');
+				if (type === 'error') {
+					messageBubble.classList.add('bg-red-800', 'text-white');
+				} else if (type === 'info') {
+					messageBubble.classList.add('bg-stone-200', 'text-stone-500', 'text-center', 'w-full', 'max-w-full', 'shadow-none');
+				} else {
+					messageBubble.classList.add('bg-stone-200', 'text-stone-800');
+				}
+			}
 
-            messageBubble.innerHTML = `<p>${message.replace(/\n/g, '<br>')}</p>`;
-            messageWrapper.appendChild(messageBubble);
-            chatMessages.appendChild(messageWrapper);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
+			// ✅ Dòng quan trọng đã được cập nhật ở đây
+			messageBubble.innerHTML = `<p>${linkify(message)}</p>`;
+			
+			messageWrapper.appendChild(messageBubble);
+			chatMessages.appendChild(messageWrapper);
+			chatMessages.scrollTop = chatMessages.scrollHeight;
+		}
+
+		function linkify(text) {
+			// 1. Thay thế ký tự xuống dòng bằng thẻ <br>
+			let processedText = text.replace(/\n/g, '<br>');
+
+			// 2. Tìm và thay thế các URL thành thẻ <a>
+			const urlRegex = /(https?:\/\/[^\s]+)/g;
+			processedText = processedText.replace(urlRegex, function(url) {
+				return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-semibold">${url}</a>`;
+			});
+
+			return processedText;
+		}
 
         async function callBackendAPI(question, context) {
             if (BACKEND_API_URL === "URL_CUA_RENDER_SE_DAT_O_DAY") {

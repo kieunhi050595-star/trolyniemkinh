@@ -147,9 +147,9 @@
                 const tempLine = document.createElement('div');
                 tempLine.textContent = line;
                 const urlRegex = /(https?:\/\/[^\s<>"']+)/g;
-                // SỬA LỖI: Sử dụng inline style để đảm bảo link luôn có màu xanh và gạch chân.
+                // SỬA LỖI: Sử dụng inline style với !important để đảm bảo link luôn có màu xanh và gạch chân.
                 return tempLine.innerHTML.replace(urlRegex, (url) => {
-                    const style = "color: #2563eb; text-decoration: underline; font-weight: 600;";
+                    const style = "color: #2563eb !important; text-decoration: underline !important; font-weight: 600 !important;";
                     return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="${style}">${url}</a>`;
                 });
             }).join('<br>');

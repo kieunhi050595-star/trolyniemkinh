@@ -94,7 +94,6 @@
         // --- END PWA ---
 
         // === THÔNG TIN CẤU HÌNH QUAN TRỌNG ===
-        // SỬA LỖI: Cập nhật URL chính xác theo log lỗi để khắc phục lỗi 404.
         const BACKEND_API_URL = "https://trolyniemkinh.onrender.com";
         const DEFAULT_DOCUMENT_URL = "niemkinh.txt";
         let documentContext = "";
@@ -103,6 +102,21 @@
         const chatMessages = document.getElementById('chat-messages');
         const userInput = document.getElementById('user-input');
         const sendButton = document.getElementById('send-button');
+
+        // --- START: MÃ NGUỒN MỚI ĐỂ SỬA LỖI POPUP ---
+        // Đoạn mã này sẽ lắng nghe tất cả các sự kiện click trong khu vực tin nhắn.
+        // Nếu phần tử được click là một thẻ <a> (đường link), nó sẽ chủ động
+        // mở link đó trong một tab mới. Cách này hoạt động ổn định hơn trong popup.
+        chatMessages.addEventListener('click', function(event) {
+            if (event.target.tagName === 'A') {
+                event.preventDefault(); // Ngăn hành vi mặc định
+                const url = event.target.href;
+                if (url) {
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                }
+            }
+        });
+        // --- END: MÃ NGUỒN MỚI ĐỂ SỬA LỖI POPUP ---
 
         window.addEventListener('load', async () => {
             addMessage('Đang chuẩn bị...', 'bot', 'info');
@@ -130,12 +144,9 @@
         function linkifyAndSanitize(text) {
             if (typeof text !== 'string') return '';
             
-            // Dùng lại văn bản gốc để xử lý xuống dòng cho chính xác.
             return text.split('\n').map(line => {
-                // Dùng textContent để vô hiệu hóa mọi mã HTML độc hại có thể có trong văn bản.
                 const tempLine = document.createElement('div');
                 tempLine.textContent = line;
-                // Regex này tìm các URL một cách chính xác.
                 const urlRegex = /(https?:\/\/[^\s<>"']+)/g;
                 return tempLine.innerHTML.replace(urlRegex, (url) => {
                     return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-semibold">${url}</a>`;
@@ -174,7 +185,6 @@
         }
 
         async function callBackendAPI(question, context) {
-            // SỬA LỖI: Đảm bảo không có dấu gạch chéo kép trong URL
             const url = `${BACKEND_API_URL.replace(/\/$/, "")}/api/chat`;
 
             const response = await fetch(url, {
@@ -186,15 +196,12 @@
                 })
             });
 
-            // SỬA LỖI: Xử lý lỗi tốt hơn để tránh lỗi parse JSON
             if (!response.ok) {
                 let errorText = `Lỗi HTTP: ${response.status} ${response.statusText}`;
                 try {
-                    // Cố gắng đọc lỗi dưới dạng JSON nếu có
                     const errorData = await response.json();
                     errorText = `Lỗi từ server: ${errorData.error || response.statusText}`;
                 } catch (e) {
-                    // Nếu không phải JSON, đọc dưới dạng text (ví dụ: trang lỗi HTML)
                     errorText = `Server trả về lỗi không phải JSON (status: ${response.status}). Vui lòng kiểm tra lại địa chỉ BACKEND_API_URL.`;
                 }
                 throw new Error(errorText);
@@ -221,7 +228,6 @@
                 addMessage(error.message, 'bot', 'error');
             } finally {
                 sendButton.disabled = false;
-                // SỬA LỖI: Đảm bảo chuỗi SVG là chính xác và không bị lỗi.
                 sendButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"></path><path d="M22 2L15 22l-4-9-9-4 22-2z"></path></svg>';
             }
         }

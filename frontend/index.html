@@ -121,31 +121,42 @@
             }
         });
 
-        // --- START: HÀM NÀY ĐÃ ĐƯỢC CẬP NHẬT ---
+        // --- START: HÀM NÀY ĐÃ ĐƯỢC CẬP NHẬT HOÀN TOÀN ---
         /**
-         * Hàm này tìm kiếm các URL trong một chuỗi văn bản và chuyển đổi chúng
-         * thành các thẻ <a> HTML có thể nhấp được. Phiên bản này mạnh mẽ hơn.
-         * @param {string} text - Chuỗi văn bản đầu vào.
-         * @returns {string} - Chuỗi HTML đã được xử lý.
+         * A robust function to find URLs in a string and convert them to clickable HTML <a> tags.
+         * This version first sanitizes the text to prevent HTML injection and rendering issues.
+         * @param {string} text - The input string from the bot.
+         * @returns {string} - An HTML string with clickable links.
          */
         function linkify(text) {
-            // 1. Thay thế ký tự xuống dòng bằng thẻ <br>
-            let processedText = text.replace(/\n/g, '<br>');
+            // 1. Safety check: Ensure the input is a string.
+            if (typeof text !== 'string') {
+                return text; // Return as is if not a string.
+            }
 
-            // 2. Tìm và thay thế các URL thành thẻ <a>
-            // Regex này tốt hơn, nó có thể xử lý các link bắt đầu bằng www.
-            // và tránh việc bao gồm các dấu câu ở cuối link (như . , : ; ))
-            const urlRegex = /((?:https?:\/\/|www\.)[^\s.,;:)\]]+)/g;
-            processedText = processedText.replace(urlRegex, function(url) {
-                // Nếu link không có http/https, ví dụ bắt đầu bằng www. , thì thêm http:// vào
+            // 2. Sanitize text: Create a temporary element to safely convert special characters
+            // (like <, >) into HTML entities (e.g., &lt;, &gt;). This is a crucial step
+            // to prevent the bot's response from breaking the page's HTML structure.
+            const tempDiv = document.createElement('div');
+            tempDiv.textContent = text;
+            let safeText = tempDiv.innerHTML;
+
+            // 3. Convert newlines to <br> tags for proper line breaks in HTML.
+            safeText = safeText.replace(/\n/g, '<br>');
+
+            // 4. Define a regular expression to find URLs (starting with http, https, or www).
+            // This regex avoids including trailing punctuation like commas or periods in the URL.
+            const urlRegex = /((?:https?:\/\/|www\.)[^\s<>"'.,;:)\]]+)/g;
+
+            // 5. Find all URLs in the sanitized text and replace them with <a> tags.
+            return safeText.replace(urlRegex, function(url) {
+                // If a URL starts with "www.", prepend "http://" to make it a valid href.
                 const properUrl = url.startsWith('www.') ? 'http://' + url : url;
-                // Bọc URL tìm thấy trong thẻ <a> để làm cho nó có thể nhấp được
+                // Return the complete HTML for the clickable link.
                 return `<a href="${properUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-semibold">${url}</a>`;
             });
-
-            return processedText;
         }
-        // --- END: HÀM NÀY ĐÃ ĐƯỢC CẬP NHẬT ---
+        // --- END: HÀM NÀY ĐÃ ĐƯỢC CẬP NHẬT HOÀN TOÀN ---
 
         function addMessage(message, sender, type = 'normal') {
             const messageWrapper = document.createElement('div');
@@ -168,7 +179,7 @@
                 }
             }
 
-            // Sử dụng hàm linkify để xử lý tin nhắn trước khi hiển thị
+            // Use the new robust linkify function to process the message.
             messageBubble.innerHTML = `<p>${linkify(message)}</p>`;
 
             messageWrapper.appendChild(messageBubble);

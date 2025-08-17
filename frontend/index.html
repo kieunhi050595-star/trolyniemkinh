@@ -41,6 +41,7 @@
         .message-bubble p {
             font-size: 18px;
             line-height: 1.6;
+            word-break: break-word; /* Thêm thuộc tính này để link dài không làm vỡ layout */
         }
     </style>
 </head>
@@ -120,10 +121,10 @@
             }
         });
 
-        // --- START: MÃ NGUỒN MỚI ĐƯỢC THÊM VÀO ---
+        // --- START: HÀM NÀY ĐÃ ĐƯỢC CẬP NHẬT ---
         /**
          * Hàm này tìm kiếm các URL trong một chuỗi văn bản và chuyển đổi chúng
-         * thành các thẻ <a> HTML có thể nhấp được.
+         * thành các thẻ <a> HTML có thể nhấp được. Phiên bản này mạnh mẽ hơn.
          * @param {string} text - Chuỗi văn bản đầu vào.
          * @returns {string} - Chuỗi HTML đã được xử lý.
          */
@@ -132,16 +133,19 @@
             let processedText = text.replace(/\n/g, '<br>');
 
             // 2. Tìm và thay thế các URL thành thẻ <a>
-            // Regex này tìm các chuỗi bắt đầu bằng http:// hoặc https://
-            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            // Regex này tốt hơn, nó có thể xử lý các link bắt đầu bằng www.
+            // và tránh việc bao gồm các dấu câu ở cuối link (như . , : ; ))
+            const urlRegex = /((?:https?:\/\/|www\.)[^\s.,;:)\]]+)/g;
             processedText = processedText.replace(urlRegex, function(url) {
+                // Nếu link không có http/https, ví dụ bắt đầu bằng www. , thì thêm http:// vào
+                const properUrl = url.startsWith('www.') ? 'http://' + url : url;
                 // Bọc URL tìm thấy trong thẻ <a> để làm cho nó có thể nhấp được
-                return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-semibold">${url}</a>`;
+                return `<a href="${properUrl}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-semibold">${url}</a>`;
             });
 
             return processedText;
         }
-        // --- END: MÃ NGUỒN MỚI ĐƯỢC THÊM VÀO ---
+        // --- END: HÀM NÀY ĐÃ ĐƯỢC CẬP NHẬT ---
 
         function addMessage(message, sender, type = 'normal') {
             const messageWrapper = document.createElement('div');
@@ -164,10 +168,8 @@
                 }
             }
 
-            // --- START: DÒNG NÀY ĐÃ ĐƯỢC CẬP NHẬT ---
             // Sử dụng hàm linkify để xử lý tin nhắn trước khi hiển thị
             messageBubble.innerHTML = `<p>${linkify(message)}</p>`;
-            // --- END: DÒNG NÀY ĐÃ ĐƯỢC CẬP NHẬT ---
 
             messageWrapper.appendChild(messageBubble);
             chatMessages.appendChild(messageWrapper);

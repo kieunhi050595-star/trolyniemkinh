@@ -1,18 +1,14 @@
 Trợ lý giải đáp thắc mắc về Ngôi Nhà nhỏ : 
 https://nnn.pmtl.site/
-
 Trợ lý trợ duyên giải đáp thắc mắc về Ngôi nhà nhỏ : 
 https://nnn-b.pmtl.site/
 
 Trợ Lý Dịch Khai Thị :
 https://trolydichthuat1.onrender.com/
-
 Trợ Lý Dịch Khai Thị Trợ Duyên B:
 https://trolydichthuat2.onrender.com/
-
 Trợ Lý Dịch Khai Thị Trợ Duyên C:
 https://trolydichthuat3-8g1p.onrender.com/
-
 Trợ Lý Dịch Khai Thị Trợ Duyên C:
 https://trolydichthuat4.onrender.com/
 
@@ -27,7 +23,6 @@ https://trolythietke.pmtl.site/
 
 Trợ lý thiết kế trợ duyên B : 
 https://trolythietke-b.pmtl.site/
-
 Trợ lý thiết kế trợ duyên C : 
 https://trolythietke-c.pmtl.site/
 
@@ -52,11 +47,8 @@ https://radio.pmtl.site/
 Kênh Radio Bạch Thoại Phật Pháp :
 https://nghebtpp.pmtl.site/
 
-Thư viện Bạch Thoại Phật Pháp :
+Thư viện đọc Bạch Thoại Phật Pháp  :
 https://docbtpp.pmtl.site/
-
-Thư viện Ngôi nhà nhỏ và học niệm kinh : 
-https://ngoinhanho.pmtl.site/
 
 Thư viện Khai Thị của Sư Phụ Lư Đài Trưởng : 
 https://timkhaithi.pmtl.site/
@@ -67,10 +59,7 @@ https://sach.pmtl.site/
 Trợ lý đọc Sách trực tuyến :
 https://docsach.pmtl.site/
 
-Mục lục tổng quan toàn diện :
-https://mucluc.pmtl.site/
-
-Trang Chủ : 
+Trang Chủ , trang chính bao gồm tất cả thông tin về Pháp Môn Tâm Linh : 
 https://www.pmtl.site
 
 Mục lục tổng quan về Pháp Môn Tâm Linh , hướng dẫn niệm kinh , niệm kinh bài tập hàng ngày , hướng dẫn niệm Ngôi nhà nhỏ nnn , hướng dẫn về kinh văn tự tu , thăng văn đổi tên , trợ lý học Phật , trợ lý làm hình ảnh , làm video , ...
@@ -3760,4 +3749,5 @@ Nhỏ”, nếu niệm kinh văn xong mà quá 10 giờ đêm thì để sang ng
 Cũng không nên để quá lâu mới chấm vào “Ngôi Nhà Nhỏ”, thông thường không
 quá 7 ngày. Để lâu vẫn sử dụng được chỉ là năng lượng của “Ngôi Nhà Nhỏ” bị giảm
 đi.
+
 

@@ -148,17 +148,24 @@
          * @returns {string} - Chuỗi HTML đã được xử lý.
          */
         function linkifyAndSanitize(text) {
-            if (typeof text !== 'string') return '';
+            if (typeof text !== 'string') {
+                return '';
+            }
             
-            return text.split('\n').map(line => {
-                const tempLine = document.createElement('div');
-                tempLine.textContent = line;
-                const urlRegex = /(https?:\/\/[^\s<>"']+)/g;
-                // Không cần inline style nữa vì đã có CSS ở trên
-                return tempLine.innerHTML.replace(urlRegex, (url) => {
-                    return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
-                });
-            }).join('<br>');
+            // Regex để tìm URL trong văn bản
+            const urlRegex = /(https?:\/\/[^\s<>"']+)/g;
+            
+            // An toàn hóa văn bản trước khi chèn link để tránh lỗi XSS
+            const sanitizerDiv = document.createElement('div');
+            sanitizerDiv.textContent = text;
+            const sanitizedText = sanitizerDiv.innerHTML;
+            
+            // Thay thế URL trong chuỗi đã an toàn hóa bằng thẻ <a>
+            // "$&" là một ký tự đặc biệt trong hàm replace, đại diện cho chính chuỗi URL đã được tìm thấy.
+            const linkifiedText = sanitizedText.replace(urlRegex, '<a href="$&" target="_blank" rel="noopener noreferrer">$&</a>');
+            
+            // Cuối cùng, thay thế ký tự xuống dòng bằng thẻ <br> để hiển thị đúng trên HTML
+            return linkifiedText.replace(/\n/g, '<br>');
         }
 
         function addMessage(message, sender, type = 'normal') {

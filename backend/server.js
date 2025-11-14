@@ -94,7 +94,7 @@ app.post('/api/chat', async (req, res) => {
     } catch (error) {
         console.error('Lỗi khi gọi Google Gemini API:', error.response ? error.response.data : error.message);
         res.status(500).json({ 
-            error: 'Đã có lỗi xảy ra phía server khi xử lý yêu cầu của bạn.' 
+            error: 'Sư huynh chờ đệ một xíu nhé ! đệ đang hơi quá tải ạ 🙏' 
         });
     }
 });

@@ -196,7 +196,7 @@
                 let errorText = `Lỗi HTTP: ${response.status} ${response.statusText}`;
                 try {
                     const errorData = await response.json();
-                    errorText = `Lỗi từ server: ${errorData.error || response.statusText}`;
+                    errorText = `Đệ xin lỗi: ${errorData.error || response.statusText}`;
                 } catch (e) {
                     errorText = `Server trả về lỗi không phải JSON (status: ${response.status}). Vui lòng kiểm tra lại địa chỉ BACKEND_API_URL.`;
                 }

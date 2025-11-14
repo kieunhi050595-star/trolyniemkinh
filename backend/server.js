@@ -47,7 +47,7 @@ app.post('/api/chat', async (req, res) => {
             });
         }
 
-        const model = "gemini-2.0-flash";
+        const model = "gemini-2.5-flash-lite";
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
         // Tạo prompt giống hệt như trong file HTML của bạn

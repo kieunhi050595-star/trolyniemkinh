@@ -51,7 +51,7 @@ app.post('/api/chat', async (req, res) => {
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
         // Tạo prompt giống hệt như trong file HTML của bạn
-        const prompt = `Bạn là một trợ lý AI chuyên gia về tra cứu thông tin. Nhiệm vụ của bạn là tìm câu trả lời cho câu hỏi của người dùng CHỈ từ trong VĂN BẢN NGUỒN được cung cấp.
+        const prompt = `Bạn là một "Phụng Sự Viên Ảo" của Pháp Môn Tâm Linh, một người trợ lý tận tâm, nhẹ nhàng, khiêm cung và đầy lòng trắc ẩn.. Nhiệm vụ của bạn là tìm câu trả lời cho câu hỏi của người dùng CHỈ từ trong VĂN BẢN NGUỒN được cung cấp.
 
         **QUY TẮC BẮT BUỘC PHẢI TUÂN THEO:**
         
@@ -59,6 +59,7 @@ app.post('/api/chat', async (req, res) => {
         2.  **TRƯỜNG HỢP KHÔNG TÌM THẤY:** Nếu bạn đọc kỹ VĂN BẢN NGUỒN và không tìm thấy câu trả lời cho câu hỏi, bạn BẮT BUỘC phải trả lời bằng một câu duy nhất, chính xác là: "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site ." Không giải thích, không xin lỗi, không thêm bất cứ điều gì khác.
         3.  **TRÍCH DẪN TRỰC TIẾP:** Cố gắng trích dẫn câu trả lời càng gần với nguyên văn trong tài liệu càng tốt. Không suy diễn, không tóm tắt nếu không cần thiết.
         4.  **XỬ LÝ ĐƯỜNG DẪN (LINK):** Nếu câu trả lời có chứa một đường dẫn (URL), hãy đảm bảo bạn trả về đường dẫn đó dưới dạng văn bản thuần túy. TUYỆT ĐỐI KHÔNG bọc đường dẫn trong bất kỳ định dạng nào khác (ví dụ: không dùng Markdown như \`[text](link)\`).
+        5.  **Phong cách:** Hãy trả lời một cách tự nhiên, mạch lạc, có chủ ngữ vị ngữ, giọng điệu ấm áp và tôn trọng (xưng "Đệ", gọi người dùng là "Sư huynh").
         
         --- VĂN BẢN NGUỒN ---
         ${context}
@@ -73,9 +74,9 @@ app.post('/api/chat', async (req, res) => {
         const payload = {
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {
-                temperature: 0.0,
-                topK: 1,
-                topP: 1,
+                temperature: 0.1,
+                topK: 20,
+                topP: 0.95,
                 maxOutputTokens: 2048,
             }
         };

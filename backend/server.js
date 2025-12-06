@@ -37,7 +37,7 @@ app.post('/api/chat', async (req, res) => {
         }
 
         // --- QUAN TRỌNG: Dùng gemini-1.5-flash để xử lý văn bản dài chính xác nhất ---
-        const model = "gemini-3.0-flash"; 
+        const model = "gemini-2.5-flash"; 
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
         // --- PROMPT "TRÍCH XUẤT CẤU TRÚC" (Đã tối ưu cho yêu cầu của bạn) ---

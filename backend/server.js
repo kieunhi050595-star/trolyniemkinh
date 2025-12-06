@@ -47,7 +47,7 @@ app.post('/api/chat', async (req, res) => {
         1.  **SAO CHÉP Y HỆT:** Câu trả lời phải là các câu/đoạn văn được copy y hệt từ VĂN BẢN NGUỒN. Không được viết lại (paraphrase), không được tóm tắt, không được thêm từ ngữ hoa mỹ.
         2.  **KHÔNG BIẾT THÌ NÓI KHÔNG BIẾT:** Nếu không tìm thấy thông tin khớp trong văn bản, BẮT BUỘC trả lời duy nhất câu: "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site".
         3.  **KHÔNG SÁNG TẠO:** Tuyệt đối không thêm kiến thức bên ngoài.
-        4.  **XƯNG HÔ:** Bắt đầu câu trả lời bằng "Thưa Sư huynh, nội dung trong tài liệu ghi như sau:".
+        4.  **XƯNG HÔ:** Bắt đầu câu trả lời bằng "Thưa Sư huynh, đệ xin phép gửi câu trả lời ạ:".
         5.  **GIỮ NGUYÊN LINK:** Nếu đoạn trích có chứa Link, phải giữ nguyên link đó.
 
         --- VĂN BẢN NGUỒN BẮT ĐẦU ---

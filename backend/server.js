@@ -106,7 +106,7 @@ app.post('/api/chat', async (req, res) => {
         }
 
         // Định dạng câu trả lời
-        const openFrame = "Những thông tin dưới đây đều được "Trí tuệ nhân tạo" tổng hợp lại. Vì vậy Sư huynh hãy xác minh lại thông tin Quan Trọng nhé 🙏\n\n";
+        const openFrame = "Những thông tin dưới đây đều được AI tổng hợp lại. Vì vậy Sư huynh hãy xác minh lại thông tin Quan Trọng nhé 🙏\n\n";
         const closeFrame = "\n\n🙏 Để xác minh câu trả lời ! Sư huynh vui lòng truy cập :[ https://tkt.pmtl.site ]";
 
         let finalAnswer = "";

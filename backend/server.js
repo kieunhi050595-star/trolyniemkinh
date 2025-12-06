@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3001;
 
 // --- 3. Cấu hình Middleware ---
 app.use(cors());
-// Tăng giới hạn lên 50mb để đảm bảo load hết file text dài
+// Tăng giới hạn bộ nhớ để nhận file text lớn
 app.use(express.json({ limit: '50mb' })); 
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -36,35 +36,36 @@ app.post('/api/chat', async (req, res) => {
             return res.status(400).json({ error: 'Thiếu câu hỏi hoặc dữ liệu.' });
         }
 
-        // --- QUAN TRỌNG: Dùng gemini-1.5-flash để xử lý văn bản dài chính xác nhất ---
+        // SỬ DỤNG MODEL 1.5 FLASH: Để có cửa sổ ngữ cảnh lớn và tốc độ nhanh
         const model = "gemini-2.5-flash"; 
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
-        // --- PROMPT "TRÍCH XUẤT CẤU TRÚC" (Đã tối ưu cho yêu cầu của bạn) ---
+        // --- PROMPT "TRÍCH DẪN TINH GỌN" ---
+        // Prompt này ép AI chỉ nhặt đúng các dòng liên quan, không lấy cả chương/phần.
         const prompt = `
-        Nhiệm vụ: Bạn là công cụ tìm kiếm chính xác tuyệt đối trong văn bản Pháp Môn Tâm Linh.
+        Bạn là một công cụ trích xuất dữ liệu chính xác tuyệt đối.
         
-        Người dùng hỏi: "${question}"
-
-        Hãy tìm trong VĂN BẢN NGUỒN bên dưới đoạn thông tin trả lời cho câu hỏi trên.
-
-        QUY TẮC TRẢ LỜI (BẮT BUỘC TUÂN THỦ):
-        1. **ĐỊNH DẠNG:** Phải trích xuất **nguyên văn cả Tiêu Đề (Heading)** chứa thông tin đó và **các dòng nội dung bên dưới**.
-           - Ví dụ tiêu đề thường bắt đầu bằng "###", "**", hoặc số thứ tự.
-           - Giữ nguyên các ký tự định dạng Markdown như dấu sao (*), dấu gạch đầu dòng (-), in đậm (**text**).
+        NHIỆM VỤ: 
+        Tìm kiếm trong VĂN BẢN NGUỒN các câu, gạch đầu dòng (*), hoặc hàng trong bảng (|...|) chứa câu trả lời cho câu hỏi: "${question}"
         
-        2. **KHÔNG SÁNG TẠO:** Chỉ Copy và Paste y hệt từ văn bản nguồn. Không được viết lại câu, không được tóm tắt.
+        QUY TẮC TRẢ LỜI (BẮT BUỘC):
+        1. **CHỈ TRÍCH DẪN:** Chỉ Copy và Paste nguyên văn các dòng/đoạn chứa thông tin trả lời. 
+           - KHÔNG tự viết lại câu.
+           - KHÔNG thêm lời chào hỏi, mở bài, kết bài.
+           - KHÔNG lấy cả một mục lớn (ví dụ cả mục I, II) nếu chỉ có 1 dòng bên trong là câu trả lời.
         
-        3. **CHÍNH XÁC:** Chỉ trích xuất đoạn liên quan nhất. Nếu đoạn đó nằm trong mục "2.3", hãy lấy cả dòng "2.3..." và nội dung bên dưới nó.
+        2. **ĐỊNH DẠNG:** Giữ nguyên định dạng Markdown của văn bản gốc (in đậm **, gạch đầu dòng *, bảng |...|).
+        
+        3. **NHIỀU VỊ TRÍ:** Nếu câu trả lời nằm rải rác ở nhiều chỗ trong văn bản, hãy trích xuất tất cả các chỗ đó và liệt kê ra.
 
-        4. **TRƯỜNG HỢP KHÔNG TÌM THẤY:** Nếu không có thông tin khớp, chỉ trả lời duy nhất câu: 
+        4. **KHÔNG TÌM THẤY:** Nếu tuyệt đối không có thông tin nào liên quan, hãy trả lời duy nhất câu: 
            "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site"
 
         --- VĂN BẢN NGUỒN ---
         ${context}
         --- HẾT VĂN BẢN NGUỒN ---
         
-        Câu trả lời (Định dạng Markdown):
+        Kết quả trích dẫn:
         `;
 
         const safetySettings = [
@@ -78,10 +79,10 @@ app.post('/api/chat', async (req, res) => {
             contents: [{ parts: [{ text: prompt }] }],
             safetySettings: safetySettings,
             generationConfig: {
-                temperature: 0.0, // Nhiệt độ 0 để đảm bảo không bịa đặt
+                temperature: 0.0, // Nhiệt độ 0 để đảm bảo copy y nguyên, không sáng tạo
                 topK: 1,
                 topP: 0.1,
-                maxOutputTokens: 4096, // Tăng token để câu trả lời không bị cắt cụt
+                maxOutputTokens: 2048,
             }
         };
 
@@ -94,10 +95,10 @@ app.post('/api/chat', async (req, res) => {
             aiResponse = response.data.candidates[0].content?.parts[0]?.text || "";
         }
 
-        // Xử lý kết quả trả về
         let finalAnswer = aiResponse.trim();
         
-        if (!finalAnswer || finalAnswer.includes("mucluc.pmtl.site")) {
+        // Xử lý trường hợp rỗng hoặc lỗi
+        if (!finalAnswer || finalAnswer.length < 5 || finalAnswer.includes("mucluc.pmtl.site")) {
              finalAnswer = "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site";
         }
 
@@ -105,7 +106,6 @@ app.post('/api/chat', async (req, res) => {
 
     } catch (error) {
         console.error('Lỗi API:', error.response ? error.response.data : error.message);
-        // Fallback nhẹ nhàng
         res.status(500).json({ error: 'Đệ đang bận xíu, Sư huynh hỏi lại sau nhé.' });
     }
 });

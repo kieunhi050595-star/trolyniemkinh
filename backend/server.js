@@ -47,22 +47,21 @@ app.post('/api/chat', async (req, res) => {
             });
         }
 
-        const model = "gemini-2.5-flash";
+        const model = "gemini-2.5-flash-lite";
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
         // Tạo prompt giống hệt như trong file HTML của bạn
-        const prompt = `Bạn là một trợ lý AI chuyên gia về tra cứu thông tin. Nhiệm vụ của bạn là tìm câu trả lời cho câu hỏi của người dùng CHỈ từ trong VĂN BẢN NGUỒN được cung cấp.
+        const prompt = `Bạn là một công cụ trích xuất thông tin chính xác. Nhiệm vụ của bạn là tìm câu trả lời cho câu hỏi của người dùng CHỈ từ trong VĂN BẢN NGUỒN được cung cấp.
 
         **QUY TẮC BẮT BUỘC PHẢI TUÂN THEO:**
-        
-        1.  **PHẠM VI TRẢ LỜI:** Chỉ được phép sử dụng thông tin có trong VĂN BẢN NGUỒN. TUYỆT ĐỐI KHÔNG được dùng kiến thức của riêng bạn hoặc thông tin từ bên ngoài.
-        2.  **TRƯỜNG HỢP KHÔNG TÌM THẤY:** Nếu bạn đọc kỹ VĂN BẢN NGUỒN và không tìm thấy câu trả lời cho câu hỏi, bạn BẮT BUỘC phải trả lời bằng một câu duy nhất, chính xác là: "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site ." Không giải thích, không xin lỗi, không thêm bất cứ điều gì khác.
-        3.  **TRÍCH DẪN TRỰC TIẾP:** Cố gắng trích dẫn câu trả lời càng gần với nguyên văn trong tài liệu càng tốt. Không suy diễn, không tóm tắt nếu không cần thiết.
+        1.  TUYỆT ĐỐI KHÔNG sử dụng kiến thức bên ngoài (out-of-context knowledge) dù bạn biết câu trả lời.
+        2.  Nếu bạn đọc kỹ VĂN BẢN NGUỒN và không tìm thấy câu trả lời cho câu hỏi, BẮT BUỘC phải trả lời bằng một câu duy nhất, chính xác là: "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site ." Không giải thích, không xin lỗi, không thêm bất cứ điều gì khác.
+        3.  trích dẫn câu trả lời chính xác văn bản gốc. TUYỆT ĐỐI KHÔNG bịa đặt thông tin không có trong văn bản.
         4.  **XỬ LÝ ĐƯỜNG DẪN (LINK):** Nếu câu trả lời có chứa một đường dẫn (URL), hãy đảm bảo bạn trả về đường dẫn đó dưới dạng văn bản thuần túy. TUYỆT ĐỐI KHÔNG bọc đường dẫn trong bất kỳ định dạng nào khác (ví dụ: không dùng Markdown như \`[text](link)\`).
         5.  **QUY TẮC XƯNG HÔ (RẤT QUAN TRỌNG):** - Bạn (AI) tự xưng là: "đệ".
             - Gọi người dùng là: "Sư huynh".
             - TUYỆT ĐỐI KHÔNG gọi người dùng là "đệ", "con", hay "bạn".
-        6.  **QUY TẮC CHUYỂN ĐỔI NGÔI:** - Nếu trong VĂN BẢN NGUỒN có các từ chỉ người nghe như "con", "các con", "trò", "đệ" (ví dụ: "Đệ phải sám hối...", "Con hãy niệm chú..."), bạn BẮT BUỘC phải đổi các từ đó thành "Sư huynh".
+        6.  **QUY TẮC CHUYỂN ĐỔI NGÔI:** - Nếu trong VĂN BẢN NGUỒN có các từ chỉ người nghe như "con", "các con", "trò", "đệ" (ví dụ: "Đệ phải sám hối...", "Con hãy niệm chú..."), bạn TUYỆT ĐỐI phải đổi các từ đó thành "Sư huynh".
             - Ví dụ nguồn: "Đệ cần tịnh tâm" -> Câu trả lời của bạn: "Sư huynh cần tịnh tâm".
         
         --- VĂN BẢN NGUỒN ---

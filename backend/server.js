@@ -8,6 +8,7 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Tăng giới hạn lên 50mb để nhận file text lớn
 app.use(cors());
 app.use(express.json({ limit: '50mb' })); 
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -30,28 +31,36 @@ app.post('/api/chat', async (req, res) => {
             return res.status(400).json({ error: 'Thiếu câu hỏi hoặc dữ liệu.' });
         }
 
-        const model = "gemini-2.5-flash"; 
+        const model = "gemini-1.5-flash"; 
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
-        // --- PROMPT "TỔNG HỢP & TRUNG THỰC TUYỆT ĐỐI" ---
+        // --- PROMPT "KHÓA CHẶT SUY DIỄN" ---
+        // Prompt này ép AI hoạt động như một thuật toán so khớp, cấm tuyệt đối việc "hiểu thoáng".
         const prompt = `
-        Vai trò: Bạn là trợ lý tra cứu thông tin Pháp Môn Tâm Linh.
+        VAI TRÒ: Bạn là một cỗ máy trích xuất dữ liệu vô tri. Bạn KHÔNG phải là trợ lý ảo. Bạn KHÔNG có tri thức bên ngoài.
+
+        DỮ LIỆU DUY NHẤT: Chỉ được sử dụng thông tin nằm trong phần "VĂN BẢN NGUỒN" bên dưới.
+
+        NHIỆM VỤ: Tìm câu trả lời cho câu hỏi: "${question}"
+
+        QUY TRÌNH XỬ LÝ NGHIÊM NGẶT (THỰC HIỆN TỪNG BƯỚC):
+        1. Quét văn bản nguồn để tìm các từ khóa chính trong câu hỏi.
+        2. Nếu tìm thấy đoạn văn chứa thông tin trả lời trực tiếp:
+           - Trích xuất nguyên văn các ý đó.
+           - Tổng hợp lại thành các gạch đầu dòng (*).
+           - Giữ nguyên định dạng Markdown (in đậm, bảng biểu).
         
-        Nhiệm vụ: Trả lời câu hỏi: "${question}" dựa trên VĂN BẢN NGUỒN.
+        3. KIỂM TRA ĐỘ KHỚP (QUAN TRỌNG NHẤT):
+           - Nếu câu hỏi hỏi về A, nhưng văn bản chỉ có B (gần giống A): KHÔNG ĐƯỢC TỰ SUY LUẬN B là A. -> Trả về câu mẫu.
+           - Nếu phải dùng kiến thức bên ngoài để trả lời -> Trả về câu mẫu.
+           - Nếu không tìm thấy thông tin -> Trả về câu mẫu.
 
-        QUY TẮC BẤT DI BẤT DỊCH (KHÔNG ĐƯỢC PHẠM):
-        1. **CHỈ DÙNG DỮ LIỆU ĐƯỢC CUNG CẤP:** Tuyệt đối KHÔNG sử dụng kiến thức bên ngoài của bạn. Nếu thông tin không có trong văn bản bên dưới, coi như bạn không biết.
-        
-        2. **TRÍCH DẪN & TỔNG HỢP:** - Tìm kiếm TẤT CẢ các đoạn trong văn bản có liên quan đến câu hỏi (dù nằm rải rác).
-           - Trích dẫn lại các ý đó một cách ngắn gọn, súc tích.
-           - Giữ nguyên các định dạng quan trọng (in đậm, gạch đầu dòng).
+        CÂU TRẢ LỜI MẪU (BẮT BUỘC DÙNG KHI KHÔNG TÌM THẤY HOẶC KHÔNG CHẮC CHẮN):
+        "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site"
 
-        3. **TRƯỜNG HỢP KHÔNG CÓ THÔNG TIN:** - Nếu không tìm thấy thông tin trong văn bản, BẮT BUỘC trả lời chính xác câu sau:
-           "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site"
-
-        --- VĂN BẢN NGUỒN BẮT ĐẦU ---
+        --- VĂN BẢN NGUỒN ---
         ${context}
-        --- VĂN BẢN NGUỒN KẾT THÚC ---
+        --- HẾT VĂN BẢN NGUỒN ---
         
         Câu trả lời của bạn:
         `;
@@ -67,11 +76,12 @@ app.post('/api/chat', async (req, res) => {
             contents: [{ parts: [{ text: prompt }] }],
             safetySettings: safetySettings,
             generationConfig: {
-                // 0.3 là mức hoàn hảo: Đủ thông minh để hiểu câu hỏi, nhưng quá thấp để bịa chuyện.
-                temperature: 0.3, 
-                topK: 40,
-                topP: 0.95,
-                maxOutputTokens: 4096,
+                // --- THIẾT LẬP "MÁY MÓC" ---
+                // Temperature = 0.0: AI sẽ chọn câu trả lời có xác suất cao nhất, không sáng tạo dù chỉ 1%.
+                temperature: 0.0, 
+                topK: 1,  // Chỉ xét 1 phương án duy nhất.
+                topP: 0.1, // Loại bỏ mọi từ vựng lạ.
+                maxOutputTokens: 2048,
             }
         };
 
@@ -79,7 +89,7 @@ app.post('/api/chat', async (req, res) => {
             headers: { 'Content-Type': 'application/json' }
         });
 
-        // Xử lý an toàn chống sập server (Dùng Optional Chaining ?.)
+        // Xử lý an toàn chống sập server (Optional Chaining)
         let aiResponse = "";
         const candidates = response.data?.candidates;
         if (candidates && candidates.length > 0) {
@@ -97,6 +107,7 @@ app.post('/api/chat', async (req, res) => {
 
     } catch (error) {
         console.error('Lỗi API:', error.response ? error.response.data : error.message);
+        // Trả về câu mặc định khi có lỗi hệ thống, không để lộ lỗi kỹ thuật
         res.status(200).json({ answer: "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site" });
     }
 });

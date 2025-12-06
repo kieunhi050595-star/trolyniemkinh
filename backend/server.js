@@ -1,70 +1,76 @@
 // server.js
 
+// --- 1. Import các thư viện cần thiết ---
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
-require('dotenv').config();
+require('dotenv').config(); // Tải các biến môi trường từ file .env
 
+// --- 2. Khởi tạo ứng dụng Express ---
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3001; // Sử dụng cổng do Render cung cấp hoặc 3001 khi chạy local
 
-// Tăng giới hạn lên 50mb để nhận file text lớn
-app.use(cors());
-app.use(express.json({ limit: '50mb' })); 
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+// --- 3. Cấu hình Middleware ---
+// Kích hoạt CORS để cho phép frontend gọi tới
+// Trong môi trường production, bạn nên chỉ định rõ domain của frontend
+app.use(cors()); 
+// Cho phép server đọc dữ liệu JSON từ request body
+app.use(express.json({ limit: '10mb' }));
 
+// --- ROUTE CHO HEALTH CHECK ---
 app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: "OK", message: "Server is alive" });
+  res.status(200).json({ status: "OK", message: "Server is up and running" });
 });
 
+// --- 4. Lấy API Key từ biến môi trường ---
+// Đây là cách an toàn để quản lý API Key.
+// Chúng ta sẽ thiết lập biến này trên Render sau.
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
+// --- 5. Định nghĩa một Route (API Endpoint) ---
+// Frontend sẽ gửi yêu cầu POST đến '/api/chat'
 app.post('/api/chat', async (req, res) => {
+    // Kiểm tra xem API key đã được cấu hình trên server chưa
     if (!GEMINI_API_KEY) {
-        return res.status(500).json({ error: 'Chưa cấu hình API Key.' });
+        return res.status(500).json({ 
+            error: 'GEMINI_API_KEY chưa được cấu hình trên server.' 
+        });
     }
 
     try {
+        // Lấy câu hỏi và context từ body của request mà frontend gửi lên
         const { question, context } = req.body;
 
         if (!question || !context) {
-            return res.status(400).json({ error: 'Thiếu câu hỏi hoặc dữ liệu.' });
+            return res.status(400).json({ 
+                error: 'Vui lòng cung cấp đủ "question" và "context".' 
+            });
         }
 
-        const model = "gemini-1.5-flash"; 
+        // Sử dụng model ổn định. Có thể cân nhắc dùng model pro nếu cần độ chính xác cao hơn nữa.
+        const model = "gemini-2.5-flash"; // Hoặc gemini-1.5-pro nếu có quota
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
-        // --- PROMPT "KHÓA CHẶT SUY DIỄN" ---
-        // Prompt này ép AI hoạt động như một thuật toán so khớp, cấm tuyệt đối việc "hiểu thoáng".
-        const prompt = `
-        VAI TRÒ: Bạn là một cỗ máy trích xuất dữ liệu vô tri. Bạn KHÔNG phải là trợ lý ảo. Bạn KHÔNG có tri thức bên ngoài.
+        // Tạo prompt tối ưu cho việc trích xuất chính xác
+        const prompt = `Bạn là một công cụ trích xuất thông tin chính xác tuyệt đối. Nhiệm vụ của bạn là trích xuất câu trả lời cho câu hỏi của người dùng CHỈ từ trong VĂN BẢN NGUỒN được cung cấp.
 
-        DỮ LIỆU DUY NHẤT: Chỉ được sử dụng thông tin nằm trong phần "VĂN BẢN NGUỒN" bên dưới.
+        **QUY TẮC BẮT BUỘC PHẢI TUÂN THEO TUYỆT ĐỐI (KHÔNG ĐƯỢC PHÉP SAI LỆCH):**
+        1.  **NGUỒN DỮ LIỆU DUY NHẤT:** Chỉ được phép sử dụng thông tin có trong phần "VĂN BẢN NGUỒN". TUYỆT ĐỐI KHÔNG sử dụng kiến thức bên ngoài, không suy diễn, không thêm thắt thông tin.
+        2.  **TRÍCH DẪN CHÍNH XÁC:** Câu trả lời phải bám sát câu chữ trong văn bản gốc. Không viết lại (paraphrase) nếu không cần thiết.
+        3.  **XỬ LÝ KHI KHÔNG TÌM THẤY:** Nếu thông tin không có trong văn bản nguồn, BẮT BUỘC trả lời chính xác câu: "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site ." (Giữ nguyên dấu câu và khoảng trắng). Không giải thích thêm.
+        4.  **XƯNG HÔ:** Bạn tự xưng là "đệ" và gọi người hỏi là "Sư huynh".
+        5.  **CHUYỂN ĐỔI NGÔI KỂ:** Nếu văn bản gốc dùng các từ như "con", "các con", "trò", "đệ" để chỉ người nghe/người thực hiện, hãy chuyển đổi thành "Sư huynh" cho phù hợp ngữ cảnh đối thoại. Ví dụ: "Con hãy niệm..." -> "Sư huynh hãy niệm...".
+        6.  **XỬ LÝ LINK:** Trả về URL dưới dạng văn bản thuần túy, KHÔNG dùng Markdown link (ví dụ: [tên](url)).
 
-        NHIỆM VỤ: Tìm câu trả lời cho câu hỏi: "${question}"
-
-        QUY TRÌNH XỬ LÝ NGHIÊM NGẶT (THỰC HIỆN TỪNG BƯỚC):
-        1. Quét văn bản nguồn để tìm các từ khóa chính trong câu hỏi.
-        2. Nếu tìm thấy đoạn văn chứa thông tin trả lời trực tiếp:
-           - Trích xuất nguyên văn các ý đó.
-           - Tổng hợp lại thành các gạch đầu dòng (*).
-           - Giữ nguyên định dạng Markdown (in đậm, bảng biểu).
-        
-        3. KIỂM TRA ĐỘ KHỚP (QUAN TRỌNG NHẤT):
-           - Nếu câu hỏi hỏi về A, nhưng văn bản chỉ có B (gần giống A): KHÔNG ĐƯỢC TỰ SUY LUẬN B là A. -> Trả về câu mẫu.
-           - Nếu phải dùng kiến thức bên ngoài để trả lời -> Trả về câu mẫu.
-           - Nếu không tìm thấy thông tin -> Trả về câu mẫu.
-
-        CÂU TRẢ LỜI MẪU (BẮT BUỘC DÙNG KHI KHÔNG TÌM THẤY HOẶC KHÔNG CHẮC CHẮN):
-        "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site"
-
-        --- VĂN BẢN NGUỒN ---
+        --- VĂN BẢN NGUỒN BẮT ĐẦU ---
         ${context}
-        --- HẾT VĂN BẢN NGUỒN ---
+        --- VĂN BẢN NGUỒN KẾT THÚC ---
         
-        Câu trả lời của bạn:
-        `;
+        Câu hỏi của người dùng: ${question}
+        
+        Câu trả lời của bạn (Chính xác và tuân thủ mọi quy tắc trên):`;
 
+        // Cấu hình an toàn để tránh việc chặn nội dung không cần thiết trong ngữ cảnh tôn giáo/tâm linh
         const safetySettings = [
             { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
             { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
@@ -76,42 +82,60 @@ app.post('/api/chat', async (req, res) => {
             contents: [{ parts: [{ text: prompt }] }],
             safetySettings: safetySettings,
             generationConfig: {
-                // --- THIẾT LẬP "MÁY MÓC" ---
-                // Temperature = 0.0: AI sẽ chọn câu trả lời có xác suất cao nhất, không sáng tạo dù chỉ 1%.
-                temperature: 0.0, 
-                topK: 1,  // Chỉ xét 1 phương án duy nhất.
-                topP: 0.1, // Loại bỏ mọi từ vựng lạ.
+                // THIẾT LẬP QUAN TRỌNG CHO ĐỘ CHÍNH XÁC CAO
+                temperature: 0,      // Loại bỏ tính sáng tạo/ngẫu nhiên
+                topK: 1,             // Chỉ chọn token có xác suất cao nhất
+                topP: 0,             // Giới hạn tập hợp token (kết hợp với topK=1 để deterministic nhất có thể)
                 maxOutputTokens: 2048,
             }
         };
 
+        // Gửi yêu cầu đến Google Gemini API bằng axios
         const response = await axios.post(apiUrl, payload, {
             headers: { 'Content-Type': 'application/json' }
         });
 
-        // Xử lý an toàn chống sập server (Optional Chaining)
         let aiResponse = "";
-        const candidates = response.data?.candidates;
-        if (candidates && candidates.length > 0) {
-            aiResponse = candidates[0]?.content?.parts?.[0]?.text || "";
+        
+        // Kiểm tra an toàn dữ liệu trả về
+        if (response.data.candidates && response.data.candidates.length > 0) {
+            aiResponse = response.data.candidates[0].content?.parts[0]?.text || "";
+        } else {
+            console.log("API Response không có candidates:", JSON.stringify(response.data));
+            aiResponse = "Hiện tại đệ chưa thể xử lý câu hỏi này do vấn đề kỹ thuật...";
         }
 
-        let finalAnswer = aiResponse.trim();
-        
-        // Kiểm tra kỹ lần cuối
-        if (!finalAnswer || finalAnswer.length < 5 || finalAnswer.includes("mucluc.pmtl.site")) {
-             finalAnswer = "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site";
+        // Định dạng câu trả lời
+        const openFrame = "Đệ xin trả lời câu hỏi của Sư Huynh dựa trên nguồn dữ liệu hiện tại đệ có như sau ạ 🙏\n\n";
+        const closeFrame = "\n\nTrên đây là toàn bộ nội dung đệ tìm được, rất mong những thông tin này hữu ích với Sư huynh, nếu cần trợ giúp gì thêm Sư huynh hãy đặt câu hỏi ạ 🙏";
+
+        let finalAnswer = "";
+
+        // Kiểm tra xem câu trả lời có chứa link mục lục (dấu hiệu không tìm thấy) hay không
+        // Sử dụng trim() để tránh lỗi do khoảng trắng thừa
+        if (aiResponse.includes("mucluc.pmtl.site") || aiResponse.trim() === "") {
+             // Nếu không tìm thấy hoặc AI trả về rỗng -> Trả về câu mặc định
+             if (aiResponse.trim() === "") {
+                 finalAnswer = "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site .";
+             } else {
+                 finalAnswer = aiResponse;
+             }
+        } else {
+            // Nếu tìm thấy -> Đóng khung trang trọng
+            finalAnswer = openFrame + aiResponse + closeFrame;
         }
 
         res.json({ answer: finalAnswer });
 
     } catch (error) {
-        console.error('Lỗi API:', error.response ? error.response.data : error.message);
-        // Trả về câu mặc định khi có lỗi hệ thống, không để lộ lỗi kỹ thuật
-        res.status(200).json({ answer: "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site" });
+        console.error('Lỗi khi gọi Google Gemini API:', error.response ? error.response.data : error.message);
+        res.status(500).json({ 
+            error: 'Sư huynh chờ đệ một xíu nhé ! đệ đang hơi quá tải ạ 🙏.' 
+        });
     }
 });
 
+// --- 6. Khởi động máy chủ ---
 app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
+    console.log(`Server đang chạy tại http://localhost:${PORT}`);
 });

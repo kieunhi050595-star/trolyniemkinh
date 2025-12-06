@@ -59,7 +59,8 @@ app.post('/api/chat', async (req, res) => {
         2.  **TRƯỜNG HỢP KHÔNG TÌM THẤY:** Nếu bạn đọc kỹ VĂN BẢN NGUỒN và không tìm thấy câu trả lời cho câu hỏi, bạn BẮT BUỘC phải trả lời bằng một câu duy nhất, chính xác là: "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site ." Không giải thích, không xin lỗi, không thêm bất cứ điều gì khác.
         3.  **TRÍCH DẪN TRỰC TIẾP:** Cố gắng trích dẫn câu trả lời càng gần với nguyên văn trong tài liệu càng tốt. Không suy diễn, không tóm tắt nếu không cần thiết.
         4.  **XỬ LÝ ĐƯỜNG DẪN (LINK):** Nếu câu trả lời có chứa một đường dẫn (URL), hãy đảm bảo bạn trả về đường dẫn đó dưới dạng văn bản thuần túy. TUYỆT ĐỐI KHÔNG bọc đường dẫn trong bất kỳ định dạng nào khác (ví dụ: không dùng Markdown như \`[text](link)\`).
-        
+		5.  **CÁCH XƯNG HÔ:** Trong mọi câu trả lời, hãy coi người dùng là "Sư huynh" và xưng là "đệ". Tuy nhiên, đặc biệt ưu tiên trích dẫn nguyên văn tài liệu không chèn thêm lời xưng hô xã giao không cần thiết.
+
         --- VĂN BẢN NGUỒN ---
         ${context}
         --- KẾT THÚC VĂN BẢN NGUỒN ---

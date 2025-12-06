@@ -63,13 +63,33 @@ app.post('/api/chat', async (req, res) => {
         4.  **XỬ LÝ ĐƯỜNG DẪN (LINK):** Nếu câu trả lời có chứa một đường dẫn (URL), hãy đảm bảo bạn trả về đường dẫn đó dưới dạng văn bản thuần túy. TUYỆT ĐỐI KHÔNG bọc đường dẫn trong bất kỳ định dạng nào khác (ví dụ: không dùng Markdown như \`[text](link)\`).
 
         *** QUY TRÌNH TƯ DUY (BẮT BUỘC THỰC HIỆN TRONG ĐẦU) ***
-        1.  **Phân tích ý định:** Đừng chỉ bắt từ khóa bề mặt. Hãy hiểu ý nghĩa sâu xa. 
+        *** HIỂU THUẬT NGỮ & TỪ ĐỒNG NGHĨA (TỪ ĐIỂN NGẦM) ***
+        1.  **Trước khi tìm kiếm, hãy tự động ánh xạ các từ khóa trong câu hỏi của người dùng sang các thuật ngữ chuẩn trong văn bản nguồn theo danh sách sau:
+            - "nnn", "xnz", "ngôi nhà", "tờ kinh", "tiểu phòng tử" -> "Ngôi Nhà Nhỏ".
+            - "pmtl", "pháp môn" -> "Pháp Môn Tâm Linh".
+            - "btpp", "bạch thoại" -> "Bạch Thoại Phật Pháp".
+            - "kbt", "công phu", "bài tập" -> "Kinh Bài Tập".
+            - "kvtt" -> "Kinh Văn Tự Tu".
+            - "sư phụ", "đài trưởng", "thầy lư" -> "Lư Quân Hoành".
+            - "sh", "huynh đệ", "đồng tu" -> "Sư Huynh".
+            - "psv" -> "Phụng Sự Viên".
+            - "cđb", "đại bi" -> "Chú Đại Bi".
+            - "tk", "tâm kinh" -> "Tâm Kinh".
+            - "lpdshv", "lễ phật", "sám hối văn" -> "Lễ Phật Đại Sám Hối Văn".
+            - "vsc", "chú vãng sanh" -> "Vãng Sanh Tịnh Độ Thần Chú".
+            - "thất phật" -> "Thất Phật Diệt Tội Chân Ngôn".
+            - "mmtl", "mật mã 7829" -> "Mật mã tâm linh 7829".
+            - "ps", "thả cá" -> "Phóng Sinh".
+            - "chấm thiếu", "quên chấm", "sót chấm" -> Tìm mục: "Xử lý khi chấm thiếu" hoặc "Quy định chấm điểm".
+            - "đốt rồi", "hóa rồi", "lỡ đốt" -> Tìm mục: "Quy trình đốt", "Xử lý sau khi đốt" hoặc "Lưu ý quan trọng về xử lý tro".
+            - "vi nguyện", "thất hứa", "làm sai lời thề" -> Tìm mục: "Vấn đề thất nguyện" hoặc "Cảnh báo quan trọng về lời nguyện".
+        2.  **Phân tích ý định:** Đừng chỉ bắt từ khóa bề mặt. Hãy hiểu ý nghĩa sâu xa. 
             - Nếu hỏi "nhập môn", "mới toanh", "chưa biết gì" -> Hãy tìm thông tin về "người mới bắt đầu", "căn bản".
             - Nếu hỏi "đen đủi", "xui xẻo" -> Hãy tìm thông tin về "tiêu tai", "nghiệp chướng".
             - Nếu hỏi "bệnh tật", "đau ốm" -> Hãy tìm thông tin về "chữa bệnh", "nguyện cầu sức khỏe".
-        2.  **Đối chiếu:** Dùng ý định đã hiểu để quét trong VĂN BẢN NGUỒN. Chỉ khi nội dung trong văn bản khớp với ý định thì mới được dùng.
+        3.  **Đối chiếu:** Dùng ý định đã hiểu để quét trong VĂN BẢN NGUỒN. Chỉ khi nội dung trong văn bản khớp với ý định thì mới được dùng.
             - Chỉ trả lời khi thông tin có bằng chứng xác thực trong văn bản.
-            - Trình bày lại thông tin đó một cách dễ hiểu, giữ nguyên ý nghĩa gốc.
+            - Trình bày lại thông tin có trong văn bản nguồn một cách chuẩn xác.
 
         --- VĂN BẢN NGUỒN (DỮ LIỆU TUYỆT ĐỐI) ---
         ${context}

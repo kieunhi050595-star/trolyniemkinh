@@ -75,8 +75,17 @@ app.post('/api/chat', async (req, res) => {
         
         Câu trả lời của bạn:`;
 
+		// --- ĐOẠN MỚI ĐƯỢC THÊM VÀO ---
+		const safetySettings = [
+		    { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+		    { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+		    { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+		    { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+		];
+		
         const payload = {
             contents: [{ parts: [{ text: prompt }] }],
+			safetySettings: safetySettings,
             generationConfig: {
                 temperature: 0.0,
                 topK: 1,
@@ -90,11 +99,20 @@ app.post('/api/chat', async (req, res) => {
             headers: { 'Content-Type': 'application/json' }
         });
 
-		    // Trích xuất câu trả lời gốc từ AI
-        let aiResponse = response.data.candidates[0]?.content?.parts[0]?.text || "Không nhận được câu trả lời hợp lệ từ AI.";
+		// --- ĐOẠN ĐÃ SỬA ---
+		let aiResponse = "";
+		
+		// Kiểm tra xem có dữ liệu 'candidates' không trước khi gọi [0]
+		if (response.data.candidates && response.data.candidates.length > 0) {
+		    aiResponse = response.data.candidates[0].content?.parts[0]?.text || "";
+		} else {
+		    // Nếu không có, in lỗi ra console thay vì sập server
+		    console.log("API Response không có candidates:", JSON.stringify(response.data));
+		    aiResponse = "Hiện tại đệ chưa thể xử lý câu hỏi này do vấn đề kỹ thuật...";
+		}
 
         const openFrame = "Đệ xin trả lời câu hỏi của Sư Huynh dựa trên nguồn dữ liệu hiện tại đệ có như sau ạ 🙏\n\n";
-        const closeFrame = "\n\nTrên đây là toàn bộ nội dung đệ tìm được , rất mong những thông tin này hữu ích với Sư huynh , nếu cần trợ giúp gì thêm Sư huynh hãy đặt câu hỏi ! đệ xin hỗ trợ hết mình ạ 🙏";
+        const closeFrame = "\n\nTrên đây là toàn bộ nội dung đệ tìm được , rất mong những thông tin này hữu ích với Sư huynh , nếu cần trợ giúp gì thêm Sư huynh hãy đặt câu hỏi ! đệ xin dược tiếp tục hỗ trợ ạ 🙏";
 
         let finalAnswer = "";
 

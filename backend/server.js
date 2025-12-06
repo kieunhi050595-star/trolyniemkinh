@@ -11,8 +11,10 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // --- 3. Cấu hình Middleware ---
-app.use(cors()); 
-app.use(express.json({ limit: '10mb' })); // Tăng giới hạn để nhận file text lớn
+app.use(cors());
+// Tăng giới hạn lên 50mb để đảm bảo load hết file text dài
+app.use(express.json({ limit: '50mb' })); 
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // --- ROUTE HEALTH CHECK ---
 app.get('/api/health', (req, res) => {
@@ -34,31 +36,37 @@ app.post('/api/chat', async (req, res) => {
             return res.status(400).json({ error: 'Thiếu câu hỏi hoặc dữ liệu.' });
         }
 
-        // KHUYẾN NGHỊ: Dùng gemini-1.5-flash để cân bằng giữa tốc độ và khả năng hiểu ngữ cảnh lớn
-        const model = "gemini-2.5-flash-lite"; 
+        // --- QUAN TRỌNG: Dùng gemini-1.5-flash để xử lý văn bản dài chính xác nhất ---
+        const model = "gemini-1.5-flash"; 
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
-        // --- PROMPT "TRÍCH XUẤT NGUYÊN VĂN" ---
-        const prompt = `Bạn là một cỗ máy trích xuất dữ liệu chính xác.
+        // --- PROMPT "TRÍCH XUẤT CẤU TRÚC" (Đã tối ưu cho yêu cầu của bạn) ---
+        const prompt = `
+        Nhiệm vụ: Bạn là công cụ tìm kiếm chính xác tuyệt đối trong văn bản Pháp Môn Tâm Linh.
         
-        NHIỆM VỤ: Tìm kiếm câu trả lời cho câu hỏi trong VĂN BẢN NGUỒN và trích xuất NGUYÊN VĂN đoạn đó ra.
+        Người dùng hỏi: "${question}"
 
-        QUY TẮC TUYỆT ĐỐI (KHÔNG ĐƯỢC VI PHẠM):
-        1.  **SAO CHÉP Y HỆT:** Câu trả lời phải là các câu/đoạn văn được copy y hệt từ VĂN BẢN NGUỒN. Không được viết lại (paraphrase), không được tóm tắt, không được thêm từ ngữ hoa mỹ.
-        2.  **KHÔNG BIẾT THÌ NÓI KHÔNG BIẾT:** Nếu không tìm thấy thông tin khớp trong văn bản, BẮT BUỘC trả lời duy nhất câu: "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site".
-        3.  **KHÔNG SÁNG TẠO:** Tuyệt đối không thêm kiến thức bên ngoài.
-        4.  **XƯNG HÔ:** Bắt đầu câu trả lời bằng "Thưa Sư huynh, đệ xin phép gửi câu trả lời ạ 🙏:".
-        5.  **GIỮ NGUYÊN LINK:** Nếu đoạn trích có chứa Link, phải giữ nguyên link đó.
+        Hãy tìm trong VĂN BẢN NGUỒN bên dưới đoạn thông tin trả lời cho câu hỏi trên.
 
-        --- VĂN BẢN NGUỒN BẮT ĐẦU ---
+        QUY TẮC TRẢ LỜI (BẮT BUỘC TUÂN THỦ):
+        1. **ĐỊNH DẠNG:** Phải trích xuất **nguyên văn cả Tiêu Đề (Heading)** chứa thông tin đó và **các dòng nội dung bên dưới**.
+           - Ví dụ tiêu đề thường bắt đầu bằng "###", "**", hoặc số thứ tự.
+           - Giữ nguyên các ký tự định dạng Markdown như dấu sao (*), dấu gạch đầu dòng (-), in đậm (**text**).
+        
+        2. **KHÔNG SÁNG TẠO:** Chỉ Copy và Paste y hệt từ văn bản nguồn. Không được viết lại câu, không được tóm tắt.
+        
+        3. **CHÍNH XÁC:** Chỉ trích xuất đoạn liên quan nhất. Nếu đoạn đó nằm trong mục "2.3", hãy lấy cả dòng "2.3..." và nội dung bên dưới nó.
+
+        4. **TRƯỜNG HỢP KHÔNG TÌM THẤY:** Nếu không có thông tin khớp, chỉ trả lời duy nhất câu: 
+           "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site"
+
+        --- VĂN BẢN NGUỒN ---
         ${context}
-        --- VĂN BẢN NGUỒN KẾT THÚC ---
+        --- HẾT VĂN BẢN NGUỒN ---
         
-        Câu hỏi: "${question}"
-        
-        Đoạn trích dẫn nguyên văn (hoặc thông báo không tìm thấy):`;
+        Câu trả lời (Định dạng Markdown):
+        `;
 
-        // Cấu hình Safety để tránh chặn nhầm các từ ngữ tôn giáo
         const safetySettings = [
             { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
             { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
@@ -70,11 +78,10 @@ app.post('/api/chat', async (req, res) => {
             contents: [{ parts: [{ text: prompt }] }],
             safetySettings: safetySettings,
             generationConfig: {
-                // ĐÂY LÀ CHÌA KHÓA CỦA SỰ CHÍNH XÁC
-                temperature: 0.0,       // Không sáng tạo, chỉ chọn phương án chắc chắn nhất
-                topK: 1,                // Chỉ chọn 1 từ có xác suất cao nhất
-                topP: 0.1,              // Giới hạn phạm vi lựa chọn từ
-                maxOutputTokens: 2048,
+                temperature: 0.0, // Nhiệt độ 0 để đảm bảo không bịa đặt
+                topK: 1,
+                topP: 0.1,
+                maxOutputTokens: 4096, // Tăng token để câu trả lời không bị cắt cụt
             }
         };
 
@@ -88,19 +95,18 @@ app.post('/api/chat', async (req, res) => {
         }
 
         // Xử lý kết quả trả về
-        let finalAnswer = "";
-        if (aiResponse.includes("mucluc.pmtl.site") || aiResponse.trim() === "") {
+        let finalAnswer = aiResponse.trim();
+        
+        if (!finalAnswer || finalAnswer.includes("mucluc.pmtl.site")) {
              finalAnswer = "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site";
-        } else {
-             // Chỉ hiển thị nội dung trích xuất, không thêm khung rườm rà
-             finalAnswer = aiResponse;
         }
 
         res.json({ answer: finalAnswer });
 
     } catch (error) {
         console.error('Lỗi API:', error.response ? error.response.data : error.message);
-        res.status(500).json({ error: 'Hệ thống đang bận, Sư huynh thử lại sau nhé.' });
+        // Fallback nhẹ nhàng
+        res.status(500).json({ error: 'Đệ đang bận xíu, Sư huynh hỏi lại sau nhé.' });
     }
 });
 

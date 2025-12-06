@@ -63,7 +63,6 @@ app.post('/api/chat', async (req, res) => {
         4.  **XỬ LÝ ĐƯỜNG DẪN (LINK):** Nếu câu trả lời có chứa một đường dẫn (URL), hãy đảm bảo bạn trả về đường dẫn đó dưới dạng văn bản thuần túy. TUYỆT ĐỐI KHÔNG bọc đường dẫn trong bất kỳ định dạng nào khác (ví dụ: không dùng Markdown như \`[text](link)\`).
 
         *** QUY TRÌNH TƯ DUY (BẮT BUỘC THỰC HIỆN TRONG ĐẦU) ***
-        *** HIỂU THUẬT NGỮ & TỪ ĐỒNG NGHĨA (TỪ ĐIỂN NGẦM) ***
         1.  **Trước khi tìm kiếm, hãy tự động ánh xạ các từ khóa trong câu hỏi của người dùng sang các thuật ngữ chuẩn trong văn bản nguồn theo danh sách sau:
             - "nnn", "xnz", "ngôi nhà", "tờ kinh", "tiểu phòng tử" -> "Ngôi Nhà Nhỏ".
             - "pmtl", "pháp môn" -> "Pháp Môn Tâm Linh".

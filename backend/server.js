@@ -85,11 +85,24 @@ app.post('/api/chat', async (req, res) => {
             headers: { 'Content-Type': 'application/json' }
         });
 
-        // Trích xuất câu trả lời từ phản hồi của Google
-        const answer = response.data.candidates[0]?.content?.parts[0]?.text || "Không nhận được câu trả lời hợp lệ từ AI.";
-        
-        // Gửi câu trả lời về lại cho frontend
-        res.json({ answer });
+		    // Trích xuất câu trả lời gốc từ AI
+        let aiResponse = response.data.candidates[0]?.content?.parts[0]?.text || "Không nhận được câu trả lời hợp lệ từ AI.";
+
+        const openFrame = "Đệ xin trả lời câu hỏi của Sư Huynh dựa trên nguồn dữ liệu hiện tại đệ có như sau ạ 🙏\n\n";
+        const closeFrame = "\n\nTrên đây là toàn bộ nội dung đệ tìm được , rất mong những thông tin này hữu ích với Sư huynh , nếu cần trợ giúp gì thêm Sư huynh hãy đặt câu hỏi ! đệ xin hỗ trợ hết mình ạ 🙏";
+
+        let finalAnswer = "";
+
+        // Kiểm tra xem câu trả lời có chứa link mục lục (dấu hiệu không tìm thấy) hay không
+        if (aiResponse.includes("mucluc.pmtl.site")) {
+            // Nếu không tìm thấy -> Giữ nguyên câu trả lời ngắn gọn của AI
+            finalAnswer = aiResponse;
+        } else {
+            // Nếu tìm thấy -> Đóng khung trang trọng
+            finalAnswer = openFrame + aiResponse + closeFrame;
+        }
+
+        res.json({ answer: finalAnswer });
 
     } catch (error) {
         console.error('Lỗi khi gọi Google Gemini API:', error.response ? error.response.data : error.message);

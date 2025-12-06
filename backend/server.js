@@ -35,7 +35,7 @@ app.post('/api/chat', async (req, res) => {
         }
 
         // KHUYẾN NGHỊ: Dùng gemini-1.5-flash để cân bằng giữa tốc độ và khả năng hiểu ngữ cảnh lớn
-        const model = "gemini-1.5-flash"; 
+        const model = "gemini-2.5-flash-lite"; 
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
         // --- PROMPT "TRÍCH XUẤT NGUYÊN VĂN" ---

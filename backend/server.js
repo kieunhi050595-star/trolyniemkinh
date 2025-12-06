@@ -61,6 +61,8 @@ app.post('/api/chat', async (req, res) => {
             - Nếu hỏi "đen đủi", "xui xẻo" -> Hãy tìm thông tin về "tiêu tai", "nghiệp chướng".
             - Nếu hỏi "bệnh tật", "đau ốm" -> Hãy tìm thông tin về "chữa bệnh", "nguyện cầu sức khỏe".
         2.  **Đối chiếu:** Dùng ý định đã hiểu để quét trong VĂN BẢN NGUỒN. Chỉ khi nội dung trong văn bản khớp với ý định thì mới được dùng.
+            - Chỉ trả lời khi thông tin có bằng chứng xác thực trong văn bản.
+            - Trình bày lại thông tin đó một cách dễ hiểu, giữ nguyên ý nghĩa gốc.
 
         *** CÁC QUY TẮC TỐI THƯỢNG ***
         1.  **NGUỒN DỮ LIỆU DUY NHẤT:** Mọi thông tin trong câu trả lời phải có bằng chứng cụ thể từ VĂN BẢN NGUỒN bên dưới. TUYỆT ĐỐI KHÔNG dùng kiến thức bên ngoài, không tự bịa đặt, không "chém gió".
@@ -79,8 +81,8 @@ app.post('/api/chat', async (req, res) => {
         const payload = {
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {
-                temperature: 0.1,
-                topK: 20,
+                temperature: 0,
+                topK: 10,
                 topP: 0.95,
                 maxOutputTokens: 2048,
             }

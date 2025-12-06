@@ -36,12 +36,9 @@ app.post('/api/chat', async (req, res) => {
             return res.status(400).json({ error: 'Thiếu câu hỏi hoặc dữ liệu.' });
         }
 
-        // SỬ DỤNG MODEL 1.5 FLASH: Để có cửa sổ ngữ cảnh lớn và tốc độ nhanh
         const model = "gemini-2.5-flash"; 
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
-        // --- PROMPT "TRÍCH DẪN TINH GỌN" ---
-        // Prompt này ép AI chỉ nhặt đúng các dòng liên quan, không lấy cả chương/phần.
         const prompt = `
         Bạn là một công cụ trích xuất dữ liệu chính xác tuyệt đối.
         
@@ -52,11 +49,11 @@ app.post('/api/chat', async (req, res) => {
         1. **CHỈ TRÍCH DẪN:** Chỉ Copy và Paste nguyên văn các dòng/đoạn chứa thông tin trả lời. 
            - KHÔNG tự viết lại câu.
            - KHÔNG thêm lời chào hỏi, mở bài, kết bài.
-           - KHÔNG lấy cả một mục lớn (ví dụ cả mục I, II) nếu chỉ có 1 dòng bên trong là câu trả lời.
+           - KHÔNG lấy cả một mục lớn nếu chỉ có 1 dòng bên trong là câu trả lời.
         
         2. **ĐỊNH DẠNG:** Giữ nguyên định dạng Markdown của văn bản gốc (in đậm **, gạch đầu dòng *, bảng |...|).
         
-        3. **NHIỀU VỊ TRÍ:** Nếu câu trả lời nằm rải rác ở nhiều chỗ trong văn bản, hãy trích xuất tất cả các chỗ đó và liệt kê ra.
+        3. **NHIỀU VỊ TRÍ:** Nếu câu trả lời nằm rải rác, hãy trích xuất tất cả và liệt kê ra.
 
         4. **KHÔNG TÌM THẤY:** Nếu tuyệt đối không có thông tin nào liên quan, hãy trả lời duy nhất câu: 
            "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site"
@@ -79,7 +76,7 @@ app.post('/api/chat', async (req, res) => {
             contents: [{ parts: [{ text: prompt }] }],
             safetySettings: safetySettings,
             generationConfig: {
-                temperature: 0.0, // Nhiệt độ 0 để đảm bảo copy y nguyên, không sáng tạo
+                temperature: 0.0,
                 topK: 1,
                 topP: 0.1,
                 maxOutputTokens: 2048,
@@ -90,23 +87,30 @@ app.post('/api/chat', async (req, res) => {
             headers: { 'Content-Type': 'application/json' }
         });
 
+        // --- KHU VỰC SỬA LỖI (QUAN TRỌNG NHẤT) ---
+        // Sử dụng Optional Chaining (?.) để không bao giờ bị crash dù dữ liệu rỗng
         let aiResponse = "";
-        if (response.data.candidates && response.data.candidates.length > 0) {
-            aiResponse = response.data.candidates[0].content?.parts[0]?.text || "";
+        
+        const candidates = response.data?.candidates;
+        if (candidates && candidates.length > 0) {
+            // Thêm ?.[0] để đảm bảo nếu parts không tồn tại hoặc rỗng thì không lỗi
+            aiResponse = candidates[0]?.content?.parts?.[0]?.text || "";
         }
+        // ----------------------------------------
 
         let finalAnswer = aiResponse.trim();
         
         // Xử lý trường hợp rỗng hoặc lỗi
-        if (!finalAnswer || finalAnswer.length < 5 || finalAnswer.includes("mucluc.pmtl.site")) {
+        if (!finalAnswer || finalAnswer.length < 2 || finalAnswer.includes("mucluc.pmtl.site")) {
              finalAnswer = "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site";
         }
 
         res.json({ answer: finalAnswer });
 
     } catch (error) {
+        // Log lỗi chi tiết để debug nhưng không làm sập server
         console.error('Lỗi API:', error.response ? error.response.data : error.message);
-        res.status(500).json({ error: 'Đệ đang bận xíu, Sư huynh hỏi lại sau nhé.' });
+        res.status(200).json({ answer: "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site" });
     }
 });
 

@@ -47,7 +47,7 @@ app.post('/api/chat', async (req, res) => {
             });
         }
 
-        const model = "gemini-2.5-flash-lite";
+        const model = "gemini-2.5-flash";
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
         // Tạo prompt giống hệt như trong file HTML của bạn
@@ -59,25 +59,7 @@ app.post('/api/chat', async (req, res) => {
         2.  **TRƯỜNG HỢP KHÔNG TÌM THẤY:** Nếu bạn đọc kỹ VĂN BẢN NGUỒN và không tìm thấy câu trả lời cho câu hỏi, bạn BẮT BUỘC phải trả lời bằng một câu duy nhất, chính xác là: "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site ." Không giải thích, không xin lỗi, không thêm bất cứ điều gì khác.
         3.  **TRÍCH DẪN TRỰC TIẾP:** Cố gắng trích dẫn câu trả lời càng gần với nguyên văn trong tài liệu càng tốt. Không suy diễn, không tóm tắt nếu không cần thiết.
         4.  **XỬ LÝ ĐƯỜNG DẪN (LINK):** Nếu câu trả lời có chứa một đường dẫn (URL), hãy đảm bảo bạn trả về đường dẫn đó dưới dạng văn bản thuần túy. TUYỆT ĐỐI KHÔNG bọc đường dẫn trong bất kỳ định dạng nào khác (ví dụ: không dùng Markdown như \`[text](link)\`).
-        5.	** BẢNG QUY ƯỚC VIẾT TẮT : ** Trước khi tìm kiếm, hãy tự động ánh xạ các từ khóa trong câu hỏi của người dùng sang các thuật ngữ chuẩn trong văn bản nguồn theo danh sách sau:
-            - "nnn", "xnz", "ngôi nhà", "tờ kinh", "tiểu phòng tử" -> "Ngôi Nhà Nhỏ".
-            - "pmtl", "pháp môn" -> "Pháp Môn Tâm Linh".
-            - "btpp", "bạch thoại" -> "Bạch Thoại Phật Pháp".
-            - "kbt", "công phu", "bài tập" -> "Kinh Bài Tập".
-            - "kvtt" -> "Kinh Văn Tự Tu".
-            - "sư phụ", "đài trưởng", "thầy lư" -> "Lư Quân Hoành".
-            - "sh", "huynh đệ", "đồng tu" -> "Sư Huynh".
-            - "psv" -> "Phụng Sự Viên".
-            - "cđb", "đại bi" -> "Chú Đại Bi".
-            - "tk", "tâm kinh" -> "Tâm Kinh".
-            - "lpdshv", "lễ phật", "sám hối văn" -> "Lễ Phật Đại Sám Hối Văn".
-            - "vsc", "chú vãng sanh" -> "Vãng Sanh Tịnh Độ Thần Chú".
-            - "thất phật" -> "Thất Phật Diệt Tội Chân Ngôn".
-            - "mmtl", "mật mã 7829" -> "Mật mã tâm linh 7829".
-            - "ps", "thả cá" -> "Phóng Sinh".
-            - "chấm thiếu", "quên chấm", "sót chấm" -> Tìm mục: "Xử lý khi chấm thiếu" hoặc "Quy định chấm điểm".
-            - "đốt rồi", "hóa rồi", "lỡ đốt" -> Tìm mục: "Quy trình đốt", "Xử lý sau khi đốt" hoặc "Lưu ý quan trọng về xử lý tro".
-            - "vi nguyện", "thất hứa", "làm sai lời thề" -> Tìm mục: "Vấn đề thất nguyện" hoặc "Cảnh báo quan trọng về lời nguyện".
+        
         --- VĂN BẢN NGUỒN ---
         ${context}
         --- KẾT THÚC VĂN BẢN NGUỒN ---
@@ -112,7 +94,7 @@ app.post('/api/chat', async (req, res) => {
     } catch (error) {
         console.error('Lỗi khi gọi Google Gemini API:', error.response ? error.response.data : error.message);
         res.status(500).json({ 
-            error: 'Sư huynh chờ đệ một xíu nhé ! đệ đang hơi quá tải ạ 🙏' 
+            error: 'Đã có lỗi xảy ra phía server khi xử lý yêu cầu của bạn.' 
         });
     }
 });

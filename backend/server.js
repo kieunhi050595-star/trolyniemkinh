@@ -1,29 +1,23 @@
 // server.js
 
-// --- 1. Import các thư viện cần thiết ---
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 require('dotenv').config();
 
-// --- 2. Khởi tạo ứng dụng Express ---
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// --- 3. Cấu hình Middleware ---
 app.use(cors());
-// Tăng giới hạn bộ nhớ để nhận file text lớn
 app.use(express.json({ limit: '50mb' })); 
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// --- ROUTE HEALTH CHECK ---
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: "OK", message: "Server is alive" });
 });
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-// --- 5. Định nghĩa Route Chat ---
 app.post('/api/chat', async (req, res) => {
     if (!GEMINI_API_KEY) {
         return res.status(500).json({ error: 'Chưa cấu hình API Key.' });
@@ -39,30 +33,27 @@ app.post('/api/chat', async (req, res) => {
         const model = "gemini-2.5-flash"; 
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
 
+        // --- PROMPT "TỔNG HỢP & TRUNG THỰC TUYỆT ĐỐI" ---
         const prompt = `
-        Bạn là một công cụ trích xuất dữ liệu chính xác tuyệt đối.
+        Vai trò: Bạn là trợ lý tra cứu thông tin Pháp Môn Tâm Linh.
         
-        NHIỆM VỤ: 
-        Tìm kiếm trong VĂN BẢN NGUỒN các câu, gạch đầu dòng (*), hoặc hàng trong bảng (|...|) chứa câu trả lời cho câu hỏi: "${question}"
-        
-        QUY TẮC TRẢ LỜI (BẮT BUỘC):
-        1. **CHỈ TRÍCH DẪN:** Chỉ Copy và Paste nguyên văn các dòng/đoạn chứa thông tin trả lời. 
-           - KHÔNG tự viết lại câu.
-           - KHÔNG thêm lời chào hỏi, mở bài, kết bài.
-           - KHÔNG lấy cả một mục lớn nếu chỉ có 1 dòng bên trong là câu trả lời.
-        
-        2. **ĐỊNH DẠNG:** Giữ nguyên định dạng Markdown của văn bản gốc (in đậm **, gạch đầu dòng *, bảng |...|).
-        
-        3. **NHIỀU VỊ TRÍ:** Nếu câu trả lời nằm rải rác, hãy trích xuất tất cả và liệt kê ra.
+        Nhiệm vụ: Trả lời câu hỏi: "${question}" dựa trên VĂN BẢN NGUỒN.
 
-        4. **KHÔNG TÌM THẤY:** Nếu tuyệt đối không có thông tin nào liên quan, hãy trả lời duy nhất câu: 
+        QUY TẮC BẤT DI BẤT DỊCH (KHÔNG ĐƯỢC PHẠM):
+        1. **CHỈ DÙNG DỮ LIỆU ĐƯỢC CUNG CẤP:** Tuyệt đối KHÔNG sử dụng kiến thức bên ngoài của bạn. Nếu thông tin không có trong văn bản bên dưới, coi như bạn không biết.
+        
+        2. **TRÍCH DẪN & TỔNG HỢP:** - Tìm kiếm TẤT CẢ các đoạn trong văn bản có liên quan đến câu hỏi (dù nằm rải rác).
+           - Trích dẫn lại các ý đó một cách ngắn gọn, súc tích.
+           - Giữ nguyên các định dạng quan trọng (in đậm, gạch đầu dòng).
+
+        3. **TRƯỜNG HỢP KHÔNG CÓ THÔNG TIN:** - Nếu không tìm thấy thông tin trong văn bản, BẮT BUỘC trả lời chính xác câu sau:
            "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site"
 
-        --- VĂN BẢN NGUỒN ---
+        --- VĂN BẢN NGUỒN BẮT ĐẦU ---
         ${context}
-        --- HẾT VĂN BẢN NGUỒN ---
+        --- VĂN BẢN NGUỒN KẾT THÚC ---
         
-        Kết quả trích dẫn:
+        Câu trả lời của bạn:
         `;
 
         const safetySettings = [
@@ -76,10 +67,11 @@ app.post('/api/chat', async (req, res) => {
             contents: [{ parts: [{ text: prompt }] }],
             safetySettings: safetySettings,
             generationConfig: {
-                temperature: 0.0,
-                topK: 1,
-                topP: 0.1,
-                maxOutputTokens: 2048,
+                // 0.3 là mức hoàn hảo: Đủ thông minh để hiểu câu hỏi, nhưng quá thấp để bịa chuyện.
+                temperature: 0.3, 
+                topK: 40,
+                topP: 0.95,
+                maxOutputTokens: 4096,
             }
         };
 
@@ -87,28 +79,23 @@ app.post('/api/chat', async (req, res) => {
             headers: { 'Content-Type': 'application/json' }
         });
 
-        // --- KHU VỰC SỬA LỖI (QUAN TRỌNG NHẤT) ---
-        // Sử dụng Optional Chaining (?.) để không bao giờ bị crash dù dữ liệu rỗng
+        // Xử lý an toàn chống sập server (Dùng Optional Chaining ?.)
         let aiResponse = "";
-        
         const candidates = response.data?.candidates;
         if (candidates && candidates.length > 0) {
-            // Thêm ?.[0] để đảm bảo nếu parts không tồn tại hoặc rỗng thì không lỗi
             aiResponse = candidates[0]?.content?.parts?.[0]?.text || "";
         }
-        // ----------------------------------------
 
         let finalAnswer = aiResponse.trim();
         
-        // Xử lý trường hợp rỗng hoặc lỗi
-        if (!finalAnswer || finalAnswer.length < 2 || finalAnswer.includes("mucluc.pmtl.site")) {
+        // Kiểm tra kỹ lần cuối
+        if (!finalAnswer || finalAnswer.length < 5 || finalAnswer.includes("mucluc.pmtl.site")) {
              finalAnswer = "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site";
         }
 
         res.json({ answer: finalAnswer });
 
     } catch (error) {
-        // Log lỗi chi tiết để debug nhưng không làm sập server
         console.error('Lỗi API:', error.response ? error.response.data : error.message);
         res.status(200).json({ answer: "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site" });
     }

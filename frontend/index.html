@@ -133,20 +133,25 @@
             if (typeof text !== 'string') {
                 return '';
             }
-            
-            // Regex để tìm URL trong văn bản
-            const urlRegex = /(https?:\/\/[^\s<>"']+)/g;
-            
-            // An toàn hóa văn bản trước khi chèn link để tránh lỗi XSS
+        
+            // 1. An toàn hóa văn bản (Ngăn chặn mã độc HTML/Script)
             const sanitizerDiv = document.createElement('div');
             sanitizerDiv.textContent = text;
-            const sanitizedText = sanitizerDiv.innerHTML;
-            
-            // Thay thế URL trong chuỗi đã an toàn hóa bằng thẻ <a>
-            // "$&" là một ký tự đặc biệt trong hàm replace, đại diện cho chính chuỗi URL đã được tìm thấy.
+            let sanitizedText = sanitizerDiv.innerHTML;
+        
+            // 2. Xử lý In Đậm: Thay thế **nội dung** bằng <b>nội dung</b>
+            // Regex này bắt cặp dấu ** ở đầu và cuối
+            sanitizedText = sanitizedText.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+        
+            // 3. Xử lý In Nghiêng: Thay thế _nội dung_ bằng <i>nội dung</i>
+            // Regex này bắt cặp dấu _ ở đầu và cuối
+            sanitizedText = sanitizedText.replace(/_(.*?)_/g, '<i>$1</i>');
+        
+            // 4. Xử lý Link (như cũ)
+            const urlRegex = /(https?:\/\/[^\s<>"']+)/g;
             const linkifiedText = sanitizedText.replace(urlRegex, '<a href="$&" target="_blank" rel="noopener noreferrer">$&</a>');
-            
-            // Cuối cùng, thay thế ký tự xuống dòng bằng thẻ <br> để hiển thị đúng trên HTML
+        
+            // 5. Xử lý xuống dòng (như cũ)
             return linkifiedText.replace(/\n/g, '<br>');
         }
 

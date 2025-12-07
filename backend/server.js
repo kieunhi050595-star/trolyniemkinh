@@ -106,8 +106,8 @@ app.post('/api/chat', async (req, res) => {
         }
 
         // Định dạng câu trả lời
-        const openFrame = "**Phụng Sự Viên Ảo Vô Úy Trả Lời :**\n\n";
-        const closeFrame = "\n\n_Nhắc nhở: AI có thể mắc sai sót. Sư huynh nhớ kiểm tra lại tại: https://tkt.pmtl.site nhé 🙏_";
+        const openFrame = "<b>Phụng Sự Viên Ảo Vô Úy Trả Lời :</b>\n\n";
+        const closeFrame = "\n\n<i>Nhắc nhở: AI có thể mắc sai sót. Sư huynh nhớ kiểm tra lại tại: https://tkt.pmtl.site nhé 🙏</i>";
 
         let finalAnswer = "";
 

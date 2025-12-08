@@ -43,7 +43,7 @@ async function callGeminiWithRetry(payload, keyIndex = 0, retryCount = 0) {
 
     const currentKey = apiKeys[keyIndex];
     // QUAN TRỌNG: Sửa về 1.5-flash vì 2.5 chưa ra mắt (sẽ gây lỗi 404/Undefined)
-    const model = "gemini-1.5-flash"; 
+    const model = "gemini-2.5-flash"; 
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${currentKey}`;
 
     try {

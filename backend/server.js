@@ -1,4 +1,4 @@
-// server.js - Phiên bản Tích Hợp: Prompt Gốc + Chiến Thuật Mới (Gán Nhãn)
+// server.js - Phiên bản Tích Hợp: Prompt Gốc + Chiến Thuật Mới (Gán Nhãn - Labeling)
 
 const express = require('express');
 const axios = require('axios');
@@ -40,7 +40,7 @@ async function callGeminiWithRetry(payload, keyIndex = 0, retryCount = 0) {
     }
 
     const currentKey = apiKeys[keyIndex];
-    // SỬA LỖI QUAN TRỌNG: Đưa về 1.5-flash (2.5 chưa hoạt động)
+    // QUAN TRỌNG: Dùng 1.5-flash (Bản 2.5 chưa có, nếu để sẽ lỗi 404)
     const model = "gemini-2.5-flash"; 
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${currentKey}`;
 
@@ -118,7 +118,7 @@ app.post('/api/chat', async (req, res) => {
         }
 
         // =================================================================================
-        // BƯỚC 2: CHIẾN THUẬT MỚI - GÁN NHÃN "TRÍCH VĂN" (Bypass Recitation)
+        // BƯỚC 2: CHIẾN THUẬT MỚI - GÁN NHÃN "TRÍCH VĂN" (Thay thế chiến thuật cũ)
         // =================================================================================
         if (finishReason === "RECITATION" || !aiResponse) {
             console.log("⚠️ Prompt Gốc bị chặn. Kích hoạt Chiến thuật Gán Nhãn (Labeling)...");
@@ -152,8 +152,6 @@ app.post('/api/chat', async (req, res) => {
                 const candidate = response.data.candidates[0];
                 if (candidate.content?.parts?.[0]?.text) {
                     aiResponse = candidate.content.parts[0].text;
-                    // (Tùy chọn) Nếu muốn đẹp hơn, ta có thể xóa chữ "[Trích văn]:" trước khi trả về
-                    // aiResponse = aiResponse.replace(/\[Trích văn\]: /g, ""); 
                 } else {
                     aiResponse = "Nội dung này Google chặn tuyệt đối (Recitation). Sư huynh vui lòng xem trực tiếp trong sách ạ.";
                 }

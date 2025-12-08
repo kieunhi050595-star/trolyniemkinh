@@ -83,7 +83,7 @@ app.post('/api/chat', async (req, res) => {
 
         **QUY TẮC BẮT BUỘC PHẢI TUÂN THEO TUYỆT ĐỐI (KHÔNG ĐƯỢC PHÉP SAI LỆCH):**
         1.  **NGUỒN DỮ LIỆU DUY NHẤT:** Chỉ được phép sử dụng thông tin có trong phần "VĂN BẢN NGUỒN". TUYỆT ĐỐI KHÔNG sử dụng kiến thức bên ngoài, không suy diễn, không thêm thắt thông tin.
-        2.  **TRÍCH DẪN CHÍNH XÁC:** Câu trả lời phải bám sát câu chữ trong văn bản gốc. Không viết lại (paraphrase) nếu không cần thiết.
+        2.  **CHÉP NGUYÊN VĂN:** Nếu tìm thấy thông tin, hãy trích dẫn chính xác từng chữ trong tài liệu. KHÔNG được thay đổi, không diễn giải, không tóm tắt, không viết lại.
         3.  **XỬ LÝ KHI KHÔNG TÌM THẤY:** Nếu thông tin không có trong văn bản nguồn, BẮT BUỘC trả lời chính xác câu: "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site ." (Giữ nguyên dấu câu và khoảng trắng). Không giải thích thêm.
         4.  **XƯNG HÔ:** Bạn tự xưng là "đệ" và gọi người hỏi là "Sư huynh".
         5.  **CHUYỂN ĐỔI NGÔI KỂ:** Nếu văn bản gốc dùng các từ như "con", "các con", "trò", "đệ" để chỉ người nghe/người thực hiện, hãy chuyển đổi thành "Sư huynh" cho phù hợp ngữ cảnh đối thoại. Ví dụ: "Con hãy niệm..." -> "Sư huynh hãy niệm...".
@@ -121,13 +121,35 @@ app.post('/api/chat', async (req, res) => {
         // Bắt đầu thử từ key đầu tiên (index 0)
         const response = await callGeminiWithRetry(payload, 0);
 
-        // --- XỬ LÝ KẾT QUẢ TRẢ VỀ ---
+        // --- KHU VỰC CHỐNG CRASH QUAN TRỌNG NHẤT ---
         let aiResponse = "";
-        if (response.data.candidates && response.data.candidates.length > 0) {
-            aiResponse = response.data.candidates[0].content?.parts[0]?.text || "";
+        
+        // 1. Kiểm tra xem có 'candidates' hay không
+        if (!response.data || !response.data.candidates || response.data.candidates.length === 0) {
+            
+            // Log lý do tại sao không có candidates (Để bạn xem trên Render)
+            console.log("GOOGLE TRẢ VỀ RỖNG. Lý do (PromptFeedback):", JSON.stringify(response.data.promptFeedback));
+            
+            // Trả về câu trả lời mặc định thay vì để Server sập
+            aiResponse = "Đệ tìm thấy thông tin nhưng Google không cho phép hiển thị chi tiết (do chính sách bản quyền/lặp lại). Sư huynh vui lòng xem trực tiếp trong file tài liệu gốc nhé ạ.";
+            
         } else {
-            console.log("API Response rỗng:", JSON.stringify(response.data));
-            aiResponse = "Hiện tại đệ chưa thể xử lý câu hỏi này do vấn đề kỹ thuật...";
+            // 2. Nếu có candidates, lấy nội dung an toàn
+            const candidate = response.data.candidates[0];
+            
+            if (candidate.content && candidate.content.parts && candidate.content.parts[0]) {
+                aiResponse = candidate.content.parts[0].text;
+            } else {
+                // Trường hợp có candidate nhưng finishReason chặn hiển thị text
+                console.log("Candidate bị chặn. FinishReason:", candidate.finishReason);
+                if (candidate.finishReason === "RECITATION") {
+                    aiResponse = "Nội dung này giống hệt văn bản gốc nên bị ẩn. Sư huynh vui lòng tra cứu trực tiếp trong tài liệu nhé.";
+                } else if (candidate.finishReason === "SAFETY") {
+                    aiResponse = "Câu trả lời bị chặn bởi bộ lọc an toàn. Sư huynh thử hỏi cách khác xem sao ạ.";
+                } else {
+                    aiResponse = "Đệ đang gặp chút trục trặc khi đọc câu trả lời này.";
+                }
+            }
         }
 
         // --- ĐỊNH DẠNG CÂU TRẢ LỜI ---

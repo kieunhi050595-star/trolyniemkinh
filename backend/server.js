@@ -1,104 +1,73 @@
-// server.js
+// server.js - Phiên bản "Trích Xuất Thông Minh" (Smart Extraction)
 
-// --- 1. Import các thư viện cần thiết ---
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 require('dotenv').config();
 
-// --- 2. Khởi tạo ứng dụng Express ---
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// --- 3. Cấu hình Middleware ---
+// Giữ limit 50mb để nạp đủ context
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
 
-// --- ROUTE CHO HEALTH CHECK ---
 app.get('/api/health', (req, res) => {
     res.status(200).json({ status: "OK", message: "Server is up and running" });
 });
 
-// --- 4. Lấy danh sách API Key (NÂNG CẤP) ---
-// Tách chuỗi key từ biến môi trường thành mảng.
-// Ví dụ: "Key1,Key2,Key3" -> ["Key1", "Key2", "Key3"]
 const apiKeys = process.env.GEMINI_API_KEYS ? process.env.GEMINI_API_KEYS.split(',') : [];
 
-if (apiKeys.length === 0) {
-    console.error("CẢNH BÁO: Chưa cấu hình biến GEMINI_API_KEYS (nhiều key) trong .env hoặc Render.");
-}
-
-// --- HÀM GỌI API THÔNG MINH (LOGIC XOAY VÒNG KEY) ---
-// Hàm này sẽ đệ quy: Nếu key hiện tại lỗi 429 -> gọi lại chính nó với key tiếp theo
+// Hàm gọi API
 async function callGeminiWithRetry(payload, keyIndex = 0) {
-    // Nếu đã thử hết sạch key trong danh sách
-    if (keyIndex >= apiKeys.length) {
-        throw new Error("ALL_KEYS_EXHAUSTED"); // Mã lỗi riêng để nhận biết
-    }
+    if (keyIndex >= apiKeys.length) throw new Error("ALL_KEYS_EXHAUSTED");
 
     const currentKey = apiKeys[keyIndex];
-    const model = "gemini-2.5-flash"; // Model Sư huynh đang dùng
+    const model = "gemini-2.5-flash"; 
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${currentKey}`;
 
     try {
-        // console.log(`Đang thử dùng Key số ${keyIndex + 1}...`); // Bật dòng này nếu muốn xem log server
         const response = await axios.post(apiUrl, payload, {
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 60000 
         });
-        return response; // Thành công -> Trả về kết quả ngay
-
+        return response;
     } catch (error) {
-        // Kiểm tra xem có phải lỗi 429 (Too Many Requests) không
         if (error.response && error.response.status === 429) {
-            console.warn(`⚠️ Key số ${keyIndex + 1} bị quá tải (429). Đang đổi sang Key số ${keyIndex + 2}...`);
-            // GỌI LẠI CHÍNH HÀM NÀY với index của key tiếp theo
+            console.warn(`Key ${keyIndex} full, đổi key...`);
             return callGeminiWithRetry(payload, keyIndex + 1);
-        } else {
-            // Nếu là lỗi khác (ví dụ: Sai cú pháp, nội dung cấm...) thì báo lỗi luôn, không thử lại.
-            throw error;
         }
+        throw error;
     }
 }
 
-// --- 5. Route API Chat ---
 app.post('/api/chat', async (req, res) => {
-    // Kiểm tra danh sách key
-    if (apiKeys.length === 0) {
-        return res.status(500).json({
-            error: 'Server chưa cấu hình GEMINI_API_KEYS.'
-        });
-    }
+    if (apiKeys.length === 0) return res.status(500).json({ error: 'Chưa cấu hình API Key.' });
 
     try {
         const { question, context } = req.body;
+        if (!question || !context) return res.status(400).json({ error: 'Thiếu dữ liệu.' });
 
-        if (!question || !context) {
-            return res.status(400).json({
-                error: 'Vui lòng cung cấp đủ "question" và "context".'
-            });
-        }
-
-        // Tạo prompt (Giữ nguyên như cũ của Sư huynh)
-        const prompt = `Bạn là một công cụ trích xuất thông tin chính xác tuyệt đối. Nhiệm vụ của bạn là trích xuất câu trả lời cho câu hỏi của người dùng CHỈ từ trong VĂN BẢN NGUỒN được cung cấp.
-
-        **QUY TẮC BẮT BUỘC PHẢI TUÂN THEO TUYỆT ĐỐI (KHÔNG ĐƯỢC PHÉP SAI LỆCH):**
-        1.  **NGUỒN DỮ LIỆU DUY NHẤT:** Chỉ được phép sử dụng thông tin có trong phần "VĂN BẢN NGUỒN". TUYỆT ĐỐI KHÔNG sử dụng kiến thức bên ngoài, không suy diễn, không thêm thắt thông tin.
-        2.  **CHÉP NGUYÊN VĂN:** Nếu tìm thấy thông tin, hãy trích dẫn chính xác từng chữ trong tài liệu. KHÔNG được thay đổi, không diễn giải, không tóm tắt, không viết lại.
-        3.  **XỬ LÝ KHI KHÔNG TÌM THẤY:** Nếu thông tin không có trong văn bản nguồn, BẮT BUỘC trả lời chính xác câu: "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site ." (Giữ nguyên dấu câu và khoảng trắng). Không giải thích thêm.
-        4.  **XƯNG HÔ:** Bạn tự xưng là "đệ" và gọi người hỏi là "Sư huynh".
-        5.  **CHUYỂN ĐỔI NGÔI KỂ:** Nếu văn bản gốc dùng các từ như "con", "các con", "trò", "đệ" để chỉ người nghe/người thực hiện, hãy chuyển đổi thành "Sư huynh" cho phù hợp ngữ cảnh đối thoại. Ví dụ: "Con hãy niệm..." -> "Sư huynh hãy niệm...".
-        6.  **XỬ LÝ LINK:** Trả về URL dưới dạng văn bản thuần túy, KHÔNG dùng Markdown link (ví dụ: [tên](url)).
-        7. **PHONG CÁCH TRẢ LỜI:** Trả lời NGẮN GỌN, SÚC TÍCH, đi thẳng vào vấn đề chính. Không trích dẫn dài dòng nếu không cần thiết.
+        // --- PROMPT "TRÍCH XUẤT THÔNG MINH" ---
+        // Đây là trái tim của giải pháp: Yêu cầu AI lọc ý thay vì chép lại
+        const prompt = `Bạn là trợ lý hỗ trợ tu tập, giúp tra cứu tài liệu nhanh chóng và chính xác.
         
-        --- VĂN BẢN NGUỒN BẮT ĐẦU ---
+        **NHIỆM VỤ:**
+        Trả lời câu hỏi: "${question}" dựa trên VĂN BẢN NGUỒN.
+        
+        **QUY TẮC TRẢ LỜI (BẮT BUỘC):**
+        1. **DẠNG GẠCH ĐẦU DÒNG:** Câu trả lời phải được trình bày dưới dạng danh sách các gạch đầu dòng (bullet points).
+        2. **CÔ ĐỌNG & CHÍNH XÁC:** Chỉ chọn lọc những câu/đoạn chứa thông tin trực tiếp trả lời cho câu hỏi. Loại bỏ các lời dẫn nhập, các từ thừa, các đoạn văn mô tả không cần thiết.
+        3. **KHÔNG SÁNG TÁC:** Sử dụng từ ngữ gốc của văn bản để đảm bảo tính chính xác của giáo lý. Không tự ý thêm thắt suy nghĩ cá nhân.
+        4. **NẾU KHÔNG CÓ TIN:** Trả lời duy nhất: "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site ."
+        5. **XƯNG HÔ:** Bắt đầu bằng "Thưa Sư huynh, theo tài liệu thì:".
+
+        --- VĂN BẢN NGUỒN ---
         ${context}
-        --- VĂN BẢN NGUỒN KẾT THÚC ---
+        --- HẾT ---
         
-        Câu hỏi của người dùng: ${question}
-        
-        Câu trả lời của bạn (Chính xác và tuân thủ mọi quy tắc trên):`;
+        Câu trả lời (Gạch đầu dòng các ý chính):`;
 
-        // Cấu hình Safety
         const safetySettings = [
             { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
             { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
@@ -110,84 +79,51 @@ app.post('/api/chat', async (req, res) => {
             contents: [{ parts: [{ text: prompt }] }],
             safetySettings: safetySettings,
             generationConfig: {
-                temperature: 0,
-                topK: 1,
-                topP: 0,
-                maxOutputTokens: 2048,
+                temperature: 0.1, // Để thấp để AI tập trung vào sự chính xác
+                maxOutputTokens: 4096, // 4096 là quá đủ cho các gạch đầu dòng
             }
         };
 
-        // --- GỌI API VỚI CƠ CHẾ XOAY VÒNG KEY ---
-        // Bắt đầu thử từ key đầu tiên (index 0)
         const response = await callGeminiWithRetry(payload, 0);
 
-        // --- KHU VỰC CHỐNG CRASH QUAN TRỌNG NHẤT ---
+        // --- XỬ LÝ KẾT QUẢ ---
         let aiResponse = "";
         
-        // 1. Kiểm tra xem có 'candidates' hay không
+        // Kiểm tra an toàn để không bao giờ crash
         if (!response.data || !response.data.candidates || response.data.candidates.length === 0) {
-            
-            // Log lý do tại sao không có candidates (Để bạn xem trên Render)
-            console.log("GOOGLE TRẢ VỀ RỖNG. Lý do (PromptFeedback):", JSON.stringify(response.data.promptFeedback));
-            
-            // Trả về câu trả lời mặc định thay vì để Server sập
-            aiResponse = "Đệ tìm thấy thông tin nhưng Google không cho phép hiển thị chi tiết (do chính sách bản quyền/lặp lại). Sư huynh vui lòng xem trực tiếp trong file tài liệu gốc nhé ạ.";
-            
+            aiResponse = "Không tìm thấy nội dung phù hợp hoặc Google chặn hiển thị.";
         } else {
-            // 2. Nếu có candidates, lấy nội dung an toàn
             const candidate = response.data.candidates[0];
-            
-            if (candidate.content && candidate.content.parts && candidate.content.parts[0]) {
-                aiResponse = candidate.content.parts[0].text;
+            const contentParts = candidate.content?.parts;
+
+            // Ưu tiên lấy text
+            if (contentParts && contentParts.length > 0 && contentParts[0].text) {
+                aiResponse = contentParts[0].text;
             } else {
-                // Trường hợp có candidate nhưng finishReason chặn hiển thị text
-                console.log("Candidate bị chặn. FinishReason:", candidate.finishReason);
-                if (candidate.finishReason === "RECITATION") {
-                    aiResponse = "Nội dung này giống hệt văn bản gốc nên bị ẩn. Sư huynh vui lòng tra cứu trực tiếp trong tài liệu nhé.";
-                } else if (candidate.finishReason === "SAFETY") {
-                    aiResponse = "Câu trả lời bị chặn bởi bộ lọc an toàn. Sư huynh thử hỏi cách khác xem sao ạ.";
-                } else {
-                    aiResponse = "Đệ đang gặp chút trục trặc khi đọc câu trả lời này.";
-                }
+                // Xử lý các lý do chặn (Dù với gạch đầu dòng thì rất hiếm khi bị chặn Recitation nữa)
+                const reason = candidate.finishReason;
+                if (reason === "SAFETY") aiResponse = "Câu trả lời bị bộ lọc an toàn chặn.";
+                else if (reason === "RECITATION") aiResponse = "Nội dung trích dẫn quá dài, Sư huynh vui lòng xem trực tiếp trong sách.";
+                else aiResponse = "Không có phản hồi từ AI.";
             }
         }
 
-        // --- ĐỊNH DẠNG CÂU TRẢ LỜI ---
-        const openFrame = "**Phụng Sự Viên Ảo Trả Lời :**\n\n";
-        const closeFrame = "\n\n_Nhắc nhở: AI có thể mắc sai sót. Sư huynh nhớ kiểm tra lại tại: https://tkt.pmtl.site nhé 🙏_";
-      
         let finalAnswer = "";
-
-        if (aiResponse.includes("mucluc.pmtl.site") || aiResponse.trim() === "") {
-             if (aiResponse.trim() === "") {
-                 finalAnswer = "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site .";
-             } else {
-                 finalAnswer = aiResponse;
-             }
+        if (aiResponse.includes("mucluc.pmtl.site")) {
+             finalAnswer = aiResponse;
         } else {
-            finalAnswer = openFrame + aiResponse + closeFrame;
+            // Thêm định dạng in đậm tiêu đề cho đẹp mắt
+            finalAnswer = "**Phụng Sự Viên Ảo Trả Lời :**\n\n" + aiResponse + "\n\n_Nhắc nhở: Sư huynh kiểm tra lại tại: https://tkt.pmtl.site nhé 🙏_";
         }
 
         res.json({ answer: finalAnswer });
 
     } catch (error) {
-        // Log lỗi chi tiết ra console server để debug
-        console.error('Lỗi API:', error.message);
-
-        // Phân loại lỗi để trả về frontend
-        if (error.message === "ALL_KEYS_EXHAUSTED") {
-            res.status(503).json({
-                error: 'Đệ đang quá tải (Tất cả các kết nối đều bận). Sư huynh vui lòng thử lại sau 1 phút ạ 🙏.'
-            });
-        } else {
-            res.status(500).json({
-                error: 'Sư huynh chờ đệ một xíu nhé ! đệ đang gặp chút trục trặc kỹ thuật ạ 🙏.'
-            });
-        }
+        console.error('SERVER ERROR:', error.message);
+        res.status(500).json({ answer: "Đệ đang gặp chút trục trặc. Sư huynh thử lại sau nhé." });
     }
 });
 
-// --- 6. Khởi động máy chủ ---
 app.listen(PORT, () => {
     console.log(`Server đang chạy tại http://localhost:${PORT}`);
 });

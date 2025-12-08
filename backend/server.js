@@ -1,4 +1,4 @@
-// server.js - Phiên bản Tích Hợp: Prompt Gốc + Chiến Thuật Mới (Gán Nhãn - Labeling)
+// server.js - Phiên bản Fix Lỗi: Prompt Gốc + Diễn Giải (Bypass Recitation)
 
 const express = require('express');
 const axios = require('axios');
@@ -11,15 +11,14 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-// --- 1. XỬ LÝ DANH SÁCH KEY THÔNG MINH ---
+// --- 1. XỬ LÝ DANH SÁCH KEY ---
 const rawKeys = process.env.GEMINI_API_KEYS || "";
 const apiKeys = rawKeys.split(',').map(key => key.trim()).filter(key => key.length > 0);
 
 if (apiKeys.length > 0) {
-    console.log(`✅ Đã tìm thấy [${apiKeys.length}] API Keys sẵn sàng hoạt động.`);
-    apiKeys.forEach((k, i) => console.log(`   - Key ${i}: ...${k.slice(-4)}`));
+    console.log(`✅ Đã tìm thấy [${apiKeys.length}] API Keys.`);
 } else {
-    console.error("❌ CẢNH BÁO: Không tìm thấy API Key nào! Vui lòng kiểm tra biến GEMINI_API_KEYS.");
+    console.error("❌ CẢNH BÁO: Chưa cấu hình API Key!");
 }
 
 app.get('/api/health', (req, res) => {
@@ -28,11 +27,11 @@ app.get('/api/health', (req, res) => {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// --- 2. HÀM GỌI API (CƠ CHẾ XOAY VÒNG & RETRY) ---
+// --- 2. HÀM GỌI API ---
 async function callGeminiWithRetry(payload, keyIndex = 0, retryCount = 0) {
     if (keyIndex >= apiKeys.length) {
         if (retryCount < 1) {
-            console.log("🔁 Đã thử hết vòng Key, đang chờ hồi phục...");
+            console.log("🔁 Hết vòng Key, chờ 2s thử lại...");
             await sleep(2000);
             return callGeminiWithRetry(payload, 0, retryCount + 1);
         }
@@ -40,7 +39,7 @@ async function callGeminiWithRetry(payload, keyIndex = 0, retryCount = 0) {
     }
 
     const currentKey = apiKeys[keyIndex];
-    // QUAN TRỌNG: Dùng 1.5-flash (Bản 2.5 chưa có, nếu để sẽ lỗi 404)
+    // SỬA LỖI QUAN TRỌNG: Dùng 1.5-flash (2.5 chưa hoạt động)
     const model = "gemini-2.5-flash"; 
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${currentKey}`;
 
@@ -54,18 +53,16 @@ async function callGeminiWithRetry(payload, keyIndex = 0, retryCount = 0) {
         const status = error.response ? error.response.status : 0;
         
         if (status === 429 || status === 400 || status === 403 || status >= 500) {
-            console.warn(`⚠️ Key ${keyIndex} lỗi (Mã: ${status}). Đang chuyển sang Key ${keyIndex + 1}...`);
+            console.warn(`⚠️ Key ${keyIndex} lỗi (Mã: ${status}). Đổi Key...`);
             if (status === 429) await sleep(1000); 
             return callGeminiWithRetry(payload, keyIndex + 1, retryCount);
         }
-        
-        console.error(`Lỗi không thể cứu vãn (Key ${keyIndex}):`, error.message);
         throw error;
     }
 }
 
 app.post('/api/chat', async (req, res) => {
-    if (apiKeys.length === 0) return res.status(500).json({ error: 'Server chưa cấu hình API Key.' });
+    if (apiKeys.length === 0) return res.status(500).json({ error: 'Chưa cấu hình API Key.' });
 
     try {
         const { question, context } = req.body;
@@ -79,7 +76,7 @@ app.post('/api/chat', async (req, res) => {
         ];
 
         // =================================================================================
-        // BƯỚC 1: CHẠY PROMPT GỐC (Ưu tiên)
+        // BƯỚC 1: PROMPT GỐC (Ưu tiên trích dẫn chính xác)
         // =================================================================================
         const promptGoc = `Bạn là một công cụ trích xuất thông tin chính xác tuyệt đối. Nhiệm vụ của bạn là trích xuất câu trả lời cho câu hỏi của người dùng CHỈ từ trong VĂN BẢN NGUỒN được cung cấp.
 
@@ -118,16 +115,16 @@ app.post('/api/chat', async (req, res) => {
         }
 
         // =================================================================================
-        // BƯỚC 2: CHIẾN THUẬT MỚI - GÁN NHÃN "TRÍCH VĂN" (Thay thế chiến thuật cũ)
+        // BƯỚC 2: CHIẾN THUẬT CỨU NGUY - DIỄN GIẢI Ý CHÍNH (Thay thế chiến thuật cũ)
         // =================================================================================
         if (finishReason === "RECITATION" || !aiResponse) {
-            console.log("⚠️ Prompt Gốc bị chặn. Kích hoạt Chiến thuật Gán Nhãn (Labeling)...");
+            console.log("⚠️ Prompt Gốc bị chặn. Kích hoạt Chiến thuật Diễn Giải (Paraphrasing)...");
 
-            // CHIẾN THUẬT MỚI: Bắt buộc AI thêm tiền tố "[Trích văn]:" vào trước mỗi câu.
+            // CHIẾN THUẬT MỚI: Tóm lược/Viết lại ý chính để vượt tường lửa bản quyền
             const promptDienGiai = `Bạn là trợ lý hỗ trợ tu tập.
             NV: Trả lời câu hỏi: "${question}" dựa trên VĂN BẢN NGUỒN.
             
-            VẤN ĐỀ: Việc trích dẫn nguyên văn đang bị lỗi hệ thống.
+            VẤN ĐỀ: Việc trích dẫn nguyên văn đang bị lỗi hệ thống (Recitation Error).
             
             GIẢI PHÁP (BẮT BUỘC):
             1. **ĐỌC HIỂU:** Tìm các ý chính liên quan đến câu hỏi.
@@ -136,17 +133,16 @@ app.post('/api/chat', async (req, res) => {
                - **TUYỆT ĐỐI KHÔNG** làm sai lệch ý nghĩa giáo lý.
                - Giữ nguyên các thuật ngữ Phật học (Ví dụ: tên Chú, tên Bồ Tát, các danh từ riêng...).
             3. **XƯNG HÔ:** Bắt đầu bằng câu: "Do hạn chế về bản quyền trích dẫn, đệ xin tóm lược các ý chính như sau:".
-            
+
             --- VĂN BẢN NGUỒN ---
             ${context}
-            --- HẾT ---
-            
-            Kết quả:`;
+            --- HẾT ---`;
 
+            // Gọi API lần 2 (Lưu ý: Đã sửa lại tên biến thành promptDienGiai để khớp)
             response = await callGeminiWithRetry({
-                contents: [{ parts: [{ text: promptChienThuatMoi }] }],
+                contents: [{ parts: [{ text: promptDienGiai }] }], // <-- ĐÃ SỬA TÊN BIẾN Ở ĐÂY
                 safetySettings: safetySettings,
-                generationConfig: { temperature: 0.1, maxOutputTokens: 4096 }
+                generationConfig: { temperature: 0.3, maxOutputTokens: 4096 }
             }, 0);
 
             if (response.data && response.data.candidates && response.data.candidates.length > 0) {

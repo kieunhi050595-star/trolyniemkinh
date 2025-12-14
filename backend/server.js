@@ -1,3 +1,4 @@
+
 // server.js - Phiên bản Fix Lỗi: Prompt Gốc + Diễn Giải (Bypass Recitation)
 
 const express = require('express');
@@ -15,6 +16,9 @@ app.use(express.json({ limit: '50mb' }));
 const rawKeys = process.env.GEMINI_API_KEYS || "";
 const apiKeys = rawKeys.split(',').map(key => key.trim()).filter(key => key.length > 0);
 
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || ""; 
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "";
+
 if (apiKeys.length > 0) {
     console.log(`✅ Đã tìm thấy [${apiKeys.length}] API Keys.`);
 } else {
@@ -27,19 +31,42 @@ app.get('/api/health', (req, res) => {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// --- 2. HÀM GỌI API ---
+// --- HÀM GỬI CẢNH BÁO TELEGRAM (Thêm mới) ---
+async function sendTelegramAlert(message) {
+    if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT_ID) return; 
+    
+    try {
+        const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
+        await axios.post(url, {
+            chat_id: TELEGRAM_CHAT_ID,
+            text: `🤖 <b>PSV ẢO - VÔ ÚY</b> 🚨\n\n${message}`,
+            parse_mode: 'HTML'
+        });
+    } catch (error) {
+        console.error("Lỗi gửi Telegram:", error.message);
+    }
+}
+
+// --- 2. HÀM GỌI API (Có báo lỗi Telegram) ---
 async function callGeminiWithRetry(payload, keyIndex = 0, retryCount = 0) {
     if (keyIndex >= apiKeys.length) {
+        // Thử lại vòng 1 nếu chưa retry
         if (retryCount < 1) {
             console.log("🔁 Hết vòng Key, chờ 2s thử lại...");
             await sleep(2000);
             return callGeminiWithRetry(payload, 0, retryCount + 1);
         }
+
+        // ---> BÁO ĐỘNG HẾT KEY <---
+        const msg = "🆘 HẾT SẠCH API KEY! Hệ thống không thể phản hồi.";
+        console.error(msg);
+        await sendTelegramAlert(msg);
+        
         throw new Error("ALL_KEYS_EXHAUSTED");
     }
 
     const currentKey = apiKeys[keyIndex];
-    // SỬA LỖI QUAN TRỌNG: Dùng 1.5-flash (2.5 chưa hoạt động)
+    // Dùng model ổn định
     const model = "gemini-2.5-flash"; 
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${currentKey}`;
 
@@ -173,7 +200,18 @@ app.post('/api/chat', async (req, res) => {
             msg = "Hệ thống đang quá tải, tất cả các Key đều đang bận. Vui lòng thử lại sau 1-2 phút.";
         }
         console.error("Final Error Handler:", error.message);
+        await sendTelegramAlert(`❌ LỖI HỆ THỐNG:\n${error.message}`);
         res.status(503).json({ answer: msg });
+    }
+});
+
+// --- API TEST TELEGRAM (Thêm mới) ---
+app.get('/api/test-telegram', async (req, res) => {
+    try {
+        await sendTelegramAlert("🚀 <b>Test kết nối thành công!</b>\nChatbot đã sẵn sàng báo lỗi.");
+        res.json({ success: true, message: "Đã gửi tin nhắn test." });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 });
 

@@ -38,12 +38,14 @@
             word-break: break-word; /* Để link dài không làm vỡ layout */
         }
         /* START: CSS ĐỂ GIẢI QUYẾT DỨT ĐIỂM VẤN ĐỀ POPUP */
-        /* Quy tắc này có độ ưu tiên rất cao, đảm bảo mọi link bên trong
-           bong bóng chat sẽ luôn có màu xanh và gạch chân. */
         .message-bubble a {
-            color: #2563eb !important;
-            text-decoration: underline !important;
-            font-weight: 600 !important;
+            color: #FFD700 !important; /* Đổi thành màu vàng (Gold) */
+            text-decoration: none !important; /* Xóa gạch chân */
+            font-weight: 700 !important; /* Tăng độ đậm để dễ đọc trên nền đỏ */
+        }
+        /* Hiệu ứng khi di chuột vào link (tùy chọn thêm cho đẹp) */
+        .message-bubble a:hover {
+             text-decoration: underline !important; /* Di chuột vào sẽ hiện gạch chân */
         }
         /* END: CSS ĐỂ GIẢI QUYẾT DỨT ĐIỂM VẤN ĐỀ POPUP */
         /* THÊM ĐOẠN NÀY VÀO CUỐI PHẦN <style> */
@@ -184,7 +186,7 @@
                 } else if (type === 'info') {
                     messageBubble.classList.add('bg-stone-200', 'text-stone-500', 'text-center', 'w-full', 'max-w-full', 'shadow-none');
                 } else {
-                    messageBubble.classList.add('bg-stone-200', 'text-stone-800');
+                    messageBubble.classList.add('bg-red-900', 'text-amber-200');
                 }
             }
 

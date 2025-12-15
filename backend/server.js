@@ -74,6 +74,17 @@ async function sendTelegramAlert(message) {
     }
 }
 
+// --- HÀM KHẮC PHỤC LỖI ESCAPEHTML ---
+function escapeHtml(text) {
+    if (!text) return "";
+    return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 // --- 2. HÀM GỌI API GEMINI ---
 async function callGeminiWithRetry(payload, keyIndex = 0, retryCount = 0) {
     if (keyIndex >= apiKeys.length) {

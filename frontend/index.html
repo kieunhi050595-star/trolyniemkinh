@@ -48,6 +48,17 @@
             background-color: #6d2121 !important; 
             color: #FFD700 !important;            
         }
+        
+        /* CSS MỚI CHO ẢNH */
+        .chat-image {
+            max-width: 100%;
+            border-radius: 12px;
+            margin-top: 8px;
+            border: 1px solid rgba(0,0,0,0.1);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: block;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body class="bg-stone-100 text-stone-800">
@@ -72,7 +83,9 @@
     </div>
 
     <script>
-        // === 1. KHAI BÁO CẤU HÌNH TRƯỚC (QUAN TRỌNG) ===
+        // ========================================================
+        // 1. KHAI BÁO CẤU HÌNH TRƯỚC (PHẢI ĐẶT TRÊN CÙNG)
+        // ========================================================
         const BACKEND_API_URL = "https://trolyniemkinh.onrender.com";
         const DEFAULT_DOCUMENT_URL = "https://gist.githubusercontent.com/kieunhi050595-star/ddecde18f83b77d06a117a9fcf349188/raw/dulieu.txt";
         let documentContext = "";
@@ -82,7 +95,9 @@
         const userInput = document.getElementById('user-input');
         const sendButton = document.getElementById('send-button');
 
-        // === 2. KẾT NỐI SOCKET (Sau khi đã có URL) ===
+        // ========================================================
+        // 2. KẾT NỐI SOCKET (Bây giờ mới được gọi vì đã có URL)
+        // ========================================================
         const socket = io(BACKEND_API_URL.replace(/\/$/, "")); 
         let mySocketId = "";
         
@@ -91,24 +106,53 @@
             console.log("✅ Đã kết nối Socket:", mySocketId);
         });
         
+        // Lắng nghe Admin trả lời TEXT
         socket.on("admin_reply", (msg) => {
-            // Hiện tin nhắn Admin
             addMessage("**Ban Quản Trị Trả Lời:**\n\n" + msg, 'bot');
-            
-            // Âm thanh
             try { new Audio('https://www.soundjay.com/buttons/sounds/button-3.mp3').play().catch(e=>{}); } catch(e){}
         });
 
-        // === 3. CÁC HÀM XỬ LÝ GIAO DIỆN ===
+        // Lắng nghe Admin trả lời ẢNH (Image)
+        socket.on("admin_reply_image", (base64Src) => {
+            const messageWrapper = document.createElement('div');
+            messageWrapper.classList.add('message', 'mb-4', 'flex', 'w-full', 'justify-start');
+            
+            const messageBubble = document.createElement('div');
+            messageBubble.classList.add('message-bubble', 'rounded-xl', 'p-2', 'max-w-xl', 'shadow-md', 'bot-custom-theme');
+            
+            const imgElement = document.createElement('img');
+            imgElement.src = base64Src;
+            imgElement.classList.add('chat-image');
+            
+            imgElement.onclick = () => {
+                const newTab = window.open();
+                newTab.document.body.innerHTML = `<img src="${base64Src}" style="max-width:100%">`;
+            };
+
+            const title = document.createElement('p');
+            title.innerHTML = "<b>Ban Quản Trị gửi ảnh:</b>";
+            title.style.marginBottom = "5px";
+
+            messageBubble.appendChild(title);
+            messageBubble.appendChild(imgElement);
+            messageWrapper.appendChild(messageBubble);
+            
+            chatMessages.appendChild(messageWrapper);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            try { new Audio('https://www.soundjay.com/buttons/sounds/button-3.mp3').play().catch(e=>{}); } catch(e){}
+        });
+
+        // ========================================================
+        // 3. CÁC HÀM XỬ LÝ LOGIC KHÁC
+        // ========================================================
         
-        // Fix lỗi chiều cao Mobile
         const setAppHeight = () => {
             document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`);
         }
         window.addEventListener('resize', setAppHeight);
         setAppHeight();
 
-        // Xử lý click link
         chatMessages.addEventListener('click', function(event) {
             const linkElement = event.target.closest('a');
             if (linkElement) {
@@ -118,7 +162,6 @@
             }
         });
 
-        // Tải tài liệu khi mở trang
         window.addEventListener('load', async () => {
             try {
                 const response = await fetch(DEFAULT_DOCUMENT_URL);
@@ -137,19 +180,13 @@
 
         function linkifyAndSanitize(text) {
             if (typeof text !== 'string') return '';
-
             const sanitizerDiv = document.createElement('div');
             sanitizerDiv.textContent = text;
             let sanitizedText = sanitizerDiv.innerHTML;
-
-            // In Đậm & Nghiêng
             sanitizedText = sanitizedText.replace(/\*\*(.*?)\*\*/g, '<span class="font-bold">$1</span>');
             sanitizedText = sanitizedText.replace(/_(.*?)_/g, '<span class="italic">$1</span>');
-
-            // Tạo Link
             const urlRegex = /(https?:\/\/[^\s<>"']+)/g;
             const linkifiedText = sanitizedText.replace(urlRegex, '<a href="$&" target="_blank" rel="noopener noreferrer">$&</a>');
-
             return linkifiedText.replace(/\n/g, '<br>');
         }
 

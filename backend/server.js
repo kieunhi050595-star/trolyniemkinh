@@ -198,14 +198,16 @@ app.post('/api/chat', async (req, res) => {
             // 2. Lưu Socket ID vào bộ nhớ tạm
             if (teleRes.data && teleRes.data.result && socketId) {
                 const msgId = teleRes.data.result.message_id;
+                
+                // Lưu xuôi (để Webhook tìm User)
                 pendingRequests.set(msgId, socketId);
                 
-                // --- THÊM ĐOẠN NÀY ĐỂ DỌN DẸP ---
+                // ---> THÊM ĐOẠN NÀY (Lưu ngược để dọn dẹp khi User thoát)
                 if (!socketToMsgId.has(socketId)) {
                     socketToMsgId.set(socketId, []);
                 }
                 socketToMsgId.get(socketId).push(msgId);
-                // -------------------------------
+                // -------------------------------------------------------
             }
 
             finalAnswer = "Dạ, câu hỏi này hiện chưa có trong dữ liệu văn bản.\n\n" +

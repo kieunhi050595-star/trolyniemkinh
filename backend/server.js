@@ -21,6 +21,16 @@ const pendingRequests = new Map();
 
 io.on('connection', (socket) => {
     console.log('👤 User Connected:', socket.id);
+
+    socket.on('disconnect', () => {
+        console.log('User Disconnected:', socket.id);
+        // Dọn dẹp bộ nhớ khi user thoát
+        if (socketToMsgId.has(socket.id)) {
+            const msgIds = socketToMsgId.get(socket.id);
+            msgIds.forEach(id => pendingRequests.delete(id));
+            socketToMsgId.delete(socket.id);
+        }
+    });
 });
 
 app.use(cors());
@@ -185,6 +195,13 @@ app.post('/api/chat', async (req, res) => {
             if (teleRes.data && teleRes.data.result && socketId) {
                 const msgId = teleRes.data.result.message_id;
                 pendingRequests.set(msgId, socketId);
+                
+                // --- THÊM ĐOẠN NÀY ĐỂ DỌN DẸP ---
+                if (!socketToMsgId.has(socketId)) {
+                    socketToMsgId.set(socketId, []);
+                }
+                socketToMsgId.get(socketId).push(msgId);
+                // -------------------------------
             }
 
             finalAnswer = "Dạ, câu hỏi này hiện chưa có trong dữ liệu văn bản.\n\n" +
@@ -221,9 +238,10 @@ app.post(`/api/telegram-webhook/${TELEGRAM_TOKEN}`, async (req, res) => {
                 // BẮN TIN NHẮN VỀ WEB QUA SOCKET
                 io.to(userSocketId).emit('admin_reply', adminReply);
                 
-                // Xóa khỏi danh sách chờ
-                pendingRequests.delete(originalMsgId);
-                console.log(`✅ Đã chuyển câu trả lời tới Socket: ${userSocketId}`);
+                // ⚠️ QUAN TRỌNG: KHÔNG XÓA DÒNG NÀY NỮA
+                // pendingRequests.delete(originalMsgId); // <--- Đã comment lại để chat được nhiều câu
+                
+                console.log(`✅ Đã chuyển câu trả lời (tiếp theo) tới Socket: ${userSocketId}`);
             }
         }
         res.sendStatus(200);

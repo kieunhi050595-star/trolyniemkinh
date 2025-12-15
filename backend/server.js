@@ -1,12 +1,27 @@
-// server.js - Phiên bản: Tự động chuyển câu hỏi khó về Telegram
+// server.js - Phiên bản Chatbot Txt + Real-time Telegram Support
 
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
+const http = require('http'); // Thêm module http
+const { Server } = require("socket.io"); // Thêm Socket.io
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// --- CẤU HÌNH SOCKET.IO ---
+const server = http.createServer(app); // Bọc app trong server http
+const io = new Server(server, {
+    cors: { origin: "*" } // Cho phép mọi nguồn kết nối
+});
+
+// Biến lưu trữ tạm: [ID Tin nhắn Telegram] -> [Socket ID người dùng]
+const pendingRequests = new Map();
+
+io.on('connection', (socket) => {
+    console.log('👤 User Connected:', socket.id);
+});
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -30,10 +45,9 @@ app.get('/api/health', (req, res) => {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// --- HÀM GỬI CẢNH BÁO TELEGRAM (Dùng chung) ---
+// --- HÀM GỬI CẢNH BÁO TELEGRAM ---
 async function sendTelegramAlert(message) {
     if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT_ID) return; 
-    
     try {
         const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
         await axios.post(url, {
@@ -46,7 +60,7 @@ async function sendTelegramAlert(message) {
     }
 }
 
-// --- 2. HÀM GỌI API GEMINI (Có báo lỗi Telegram) ---
+// --- 2. HÀM GỌI API GEMINI ---
 async function callGeminiWithRetry(payload, keyIndex = 0, retryCount = 0) {
     if (keyIndex >= apiKeys.length) {
         if (retryCount < 1) {
@@ -86,7 +100,8 @@ app.post('/api/chat', async (req, res) => {
     if (apiKeys.length === 0) return res.status(500).json({ error: 'Chưa cấu hình API Key.' });
 
     try {
-        const { question, context } = req.body;
+        // NHẬN THÊM socketId TỪ CLIENT
+        const { question, context, socketId } = req.body;
         if (!question || !context) return res.status(400).json({ error: 'Thiếu dữ liệu.' });
 
         const safetySettings = [
@@ -96,28 +111,25 @@ app.post('/api/chat', async (req, res) => {
             { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
         ];
 
-        // =================================================================================
-        // BƯỚC 1: PROMPT GỐC (ĐÃ SỬA LOGIC "NO_INFO_FOUND")
-        // =================================================================================
+        // --- BƯỚC 1: PROMPT GỐC ---
         const promptGoc = `Bạn là một công cụ trích xuất thông tin chính xác tuyệt đối. Nhiệm vụ của bạn là trích xuất câu trả lời cho câu hỏi của người dùng CHỈ từ trong VĂN BẢN NGUỒN được cung cấp.
 
         **QUY TẮC BẮT BUỘC PHẢI TUÂN THEO TUYỆT ĐỐI:**
         1.  **NGUỒN DỮ LIỆU DUY NHẤT:** Chỉ được phép sử dụng thông tin có trong phần "VĂN BẢN NGUỒN". TUYỆT ĐỐI KHÔNG sử dụng kiến thức bên ngoài.
         2.  **CHIA NHỎ:** Không viết thành đoạn văn. Hãy tách từng ý quan trọng thành các gạch đầu dòng riêng biệt.          
-        3.  **XỬ LÝ KHI KHÔNG TÌM THẤY (QUAN TRỌNG):** Nếu thông tin không có trong văn bản nguồn, BẮT BUỘC trả lời chính xác cụm từ: "NO_INFO_FOUND" (Không thêm bớt).
+        3.  **Nếu không có thông tin, trả lời chính xác:** "NO_INFO_FOUND".
         4.  **XƯNG HÔ:** Bạn tự xưng là "đệ" và gọi người hỏi là "Sư huynh".
         5.  **CHUYỂN ĐỔI NGÔI KỂ:** Chuyển "con/trò" thành "Sư huynh".
         6.  **XỬ LÝ LINK:** Trả về URL thuần túy, KHÔNG dùng Markdown link.
         7.  **PHONG CÁCH:** Trả lời NGẮN GỌN, SÚC TÍCH, đi thẳng vào vấn đề chính.
         
-        --- VĂN BẢN NGUỒN BẮT ĐẦU ---
+        --- VĂN BẢN NGUỒN ---
         ${context}
-        --- VĂN BẢN NGUỒN KẾT THÚC ---
+        --- HẾT ---
         
         Câu hỏi: ${question}
         Câu trả lời:`;
 
-        console.log("--> Đang thử Prompt Gốc...");
         let response = await callGeminiWithRetry({
             contents: [{ parts: [{ text: promptGoc }] }],
             safetySettings: safetySettings,
@@ -127,33 +139,21 @@ app.post('/api/chat', async (req, res) => {
         let aiResponse = "";
         let finishReason = "";
 
-        if (response.data && response.data.candidates && response.data.candidates.length > 0) {
-            const candidate = response.data.candidates[0];
-            finishReason = candidate.finishReason;
-            if (candidate.content?.parts?.[0]?.text) {
-                aiResponse = candidate.content.parts[0].text.trim();
+        if (response.data?.candidates?.[0]) {
+            finishReason = response.data.candidates[0].finishReason;
+            if (response.data.candidates[0].content?.parts?.[0]?.text) {
+                aiResponse = response.data.candidates[0].content.parts[0].text.trim();
             }
         }
 
-        // =================================================================================
-        // BƯỚC 2: CHIẾN THUẬT CỨU NGUY (Nếu bị chặn bản quyền)
-        // =================================================================================
+        // --- BƯỚC 2: CỨU NGUY (RECITATION) ---
         if (finishReason === "RECITATION" || !aiResponse) {
-            console.log("⚠️ Prompt Gốc bị chặn. Kích hoạt Chiến thuật Diễn Giải...");
-
-            const promptDienGiai = `Bạn là trợ lý hỗ trợ tu tập.
-            NV: Trả lời câu hỏi: "${question}" dựa trên VĂN BẢN NGUỒN.
-            
-            VẤN ĐỀ: Việc trích dẫn nguyên văn đang bị lỗi hệ thống.
-            
-            GIẢI PHÁP:
-            1. Tìm ý chính trong văn bản.
-            2. Nếu KHÔNG CÓ thông tin, trả lời: "NO_INFO_FOUND".
-            3. Nếu CÓ, hãy diễn đạt lại ý đó, bắt đầu bằng: "Do hạn chế về bản quyền trích dẫn, đệ xin tóm lược các ý chính như sau:".
-
+            console.log("⚠️ Bị chặn bản quyền. Dùng Prompt diễn giải...");
+            const promptDienGiai = `NV: Trả lời câu hỏi "${question}" dựa trên văn bản nguồn.
+            Nếu KHÔNG CÓ thông tin, trả lời "NO_INFO_FOUND".
+            Nếu CÓ, hãy diễn đạt lại ý chính (không trích nguyên văn).
             --- VĂN BẢN NGUỒN ---
-            ${context}
-            --- HẾT ---`;
+            ${context}`;
 
             response = await callGeminiWithRetry({
                 contents: [{ parts: [{ text: promptDienGiai }] }],
@@ -164,62 +164,84 @@ app.post('/api/chat', async (req, res) => {
             if (response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
                 aiResponse = response.data.candidates[0].content.parts[0].text.trim();
             } else {
-                aiResponse = "NO_INFO_FOUND"; // Coi như không tìm thấy nếu lỗi hẳn
+                aiResponse = "NO_INFO_FOUND";
             }
         }
 
-        // =================================================================================
-        // BƯỚC 3: XỬ LÝ KẾT QUẢ CUỐI CÙNG & GỬI TELEGRAM
-        // =================================================================================
-        
+        // --- BƯỚC 3: XỬ LÝ KẾT QUẢ & GỬI TELEGRAM ---
         let finalAnswer = "";
 
-        // Kiểm tra xem AI có tìm được thông tin không
-        // Nếu AI trả về "NO_INFO_FOUND" hoặc câu báo lỗi cũ
-        if (aiResponse.includes("NO_INFO_FOUND") || aiResponse.includes("mucluc.pmtl.site") || aiResponse.length < 5) {
-            
-            console.log("⚠️ Không tìm thấy câu trả lời -> Đang chuyển về Telegram...");
+        if (aiResponse.includes("NO_INFO_FOUND") || aiResponse.length < 5) {
+            console.log("⚠️ Không tìm thấy -> Chuyển Telegram...");
 
-            // 1. Gửi tin nhắn báo động về nhóm Telegram
-            await sendTelegramAlert(
-                `❓ <b>CÂU HỎI CẦN HỖ TRỢ (Từ Chatbot Txt)</b>\n\n` +
-                `User hỏi: "${question}"\n\n` +
-                `👉 <i>Admin vui lòng kiểm tra và hỗ trợ Sư huynh này nhé!</i>`
-            );
+            // 1. Gửi tin nhắn vào nhóm (Lưu lại msgId để chờ reply)
+            const teleRes = await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+                chat_id: TELEGRAM_CHAT_ID,
+                text: `❓ <b>CÂU HỎI CẦN HỖ TRỢ</b>\n\n"${question}"\n\n👉 <i>Reply tin nhắn này để trả lời.</i>`,
+                parse_mode: 'HTML'
+            });
 
-            // 2. Trả lời cho người dùng trên Web
-            finalAnswer = "Dạ, câu hỏi này hiện chưa có trong dữ liệu văn bản mà đệ đang nắm giữ.\n\n" +
-                          "🚀 **Đệ đã chuyển câu hỏi của Sư huynh về nhóm hỗ trợ trên Telegram.**\n" +
-                          "Các Phụng Sự Viên sẽ xem và cập nhật dữ liệu sớm nhất có thể. Sư huynh hoan hỷ chờ trong giây lát hoặc đặt câu hỏi khác nhé! 🙏";
+            // 2. Lưu Socket ID vào bộ nhớ tạm
+            if (teleRes.data && teleRes.data.result && socketId) {
+                const msgId = teleRes.data.result.message_id;
+                pendingRequests.set(msgId, socketId);
+            }
+
+            finalAnswer = "Dạ, câu hỏi này hiện chưa có trong dữ liệu văn bản.\n\n" +
+                          "🚀 **Đệ đã chuyển câu hỏi về nhóm hỗ trợ.**\n" +
+                          "Sư huynh vui lòng giữ màn hình này, câu trả lời sẽ hiện ra ngay khi có phản hồi ạ! ⏳";
 
         } else {
-            // Trường hợp CÓ câu trả lời
-            finalAnswer = "**Phụng Sự Viên Ảo Trả Lời :**\n\n" + aiResponse + "\n\n_Nhắc nhở: Sư huynh kiểm tra lại tại: https://tkt.pmtl.site nhé 🙏_";
+            finalAnswer = "**Phụng Sự Viên Ảo Trả Lời :**\n\n" + aiResponse;
         }
 
         res.json({ answer: finalAnswer });
 
     } catch (error) {
-        let msg = "Lỗi hệ thống.";
-        if (error.message === "ALL_KEYS_EXHAUSTED") {
-            msg = "Hệ thống đang quá tải. Vui lòng thử lại sau 1-2 phút.";
-        }
-        console.error("Final Error Handler:", error.message);
+        console.error("Lỗi:", error.message);
         await sendTelegramAlert(`❌ LỖI HỆ THỐNG:\n${error.message}`);
-        res.status(503).json({ answer: msg });
+        res.status(503).json({ answer: "Hệ thống đang bận." });
     }
 });
 
-// --- API TEST TELEGRAM ---
+// --- API WEBHOOK: NHẬN TIN NHẮN TỪ TELEGRAM (QUAN TRỌNG) ---
+app.post(`/api/telegram-webhook/${TELEGRAM_TOKEN}`, async (req, res) => {
+    try {
+        const { message } = req.body;
+        
+        // Kiểm tra xem có phải là Reply không
+        if (message && message.reply_to_message) {
+            const originalMsgId = message.reply_to_message.message_id; // ID câu hỏi gốc
+            const adminReply = message.text; // Câu trả lời của bạn
+
+            // Kiểm tra trong bộ nhớ tạm xem có ai đang chờ câu này không
+            if (pendingRequests.has(originalMsgId)) {
+                const userSocketId = pendingRequests.get(originalMsgId);
+                
+                // BẮN TIN NHẮN VỀ WEB QUA SOCKET
+                io.to(userSocketId).emit('admin_reply', adminReply);
+                
+                // Xóa khỏi danh sách chờ
+                pendingRequests.delete(originalMsgId);
+                console.log(`✅ Đã chuyển câu trả lời tới Socket: ${userSocketId}`);
+            }
+        }
+        res.sendStatus(200);
+    } catch (e) {
+        console.error("Lỗi Webhook:", e);
+        res.sendStatus(500);
+    }
+});
+
+// --- Test Telegram ---
 app.get('/api/test-telegram', async (req, res) => {
     try {
-        await sendTelegramAlert("🚀 <b>Test kết nối thành công!</b>\nChatbot Txt đã sẵn sàng.");
-        res.json({ success: true, message: "Đã gửi tin nhắn test." });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+        await sendTelegramAlert("🚀 <b>Test kết nối thành công!</b>");
+        res.json({ success: true });
+    } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-app.listen(PORT, () => {
-    console.log(`Server đang chạy tại http://localhost:${PORT}`);
+// Thay app.listen thành server.listen để chạy Socket.io
+server.listen(PORT, () => {
+    console.log(`Server Socket.io đang chạy tại http://localhost:${PORT}`);
 });

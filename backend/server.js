@@ -227,27 +227,56 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-// --- API WEBHOOK: NHẬN TIN NHẮN TỪ TELEGRAM (QUAN TRỌNG) ---
+// --- API WEBHOOK: NHẬN TIN NHẮN (TEXT HOẶC ẢNH) TỪ TELEGRAM ---
 app.post(`/api/telegram-webhook/${TELEGRAM_TOKEN}`, async (req, res) => {
     try {
         const { message } = req.body;
         
-        // Kiểm tra xem có phải là Reply không
+        // Chỉ xử lý nếu là tin nhắn Reply
         if (message && message.reply_to_message) {
-            const originalMsgId = message.reply_to_message.message_id; // ID câu hỏi gốc
-            const adminReply = message.text; // Câu trả lời của bạn
-
-            // Kiểm tra trong bộ nhớ tạm xem có ai đang chờ câu này không
+            const originalMsgId = message.reply_to_message.message_id; 
+            
+            // Kiểm tra xem có user nào đang chờ tin nhắn này không
             if (pendingRequests.has(originalMsgId)) {
                 const userSocketId = pendingRequests.get(originalMsgId);
-                
-                // BẮN TIN NHẮN VỀ WEB QUA SOCKET
-                io.to(userSocketId).emit('admin_reply', adminReply);
-                
-                // ⚠️ QUAN TRỌNG: KHÔNG XÓA DÒNG NÀY NỮA
-                // pendingRequests.delete(originalMsgId); // <--- Đã comment lại để chat được nhiều câu
-                
-                console.log(`✅ Đã chuyển câu trả lời (tiếp theo) tới Socket: ${userSocketId}`);
+
+                // --- TRƯỜNG HỢP 1: ADMIN GỬI ẢNH ---
+                if (message.photo) {
+                    try {
+                        // 1. Lấy file_id của ảnh lớn nhất (Telegram gửi nhiều size, lấy cái cuối cùng)
+                        const fileId = message.photo[message.photo.length - 1].file_id;
+                        
+                        // 2. Lấy đường dẫn file từ Telegram API
+                        const getFileUrl = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${fileId}`;
+                        const fileInfoRes = await axios.get(getFileUrl);
+                        const filePath = fileInfoRes.data.result.file_path;
+
+                        // 3. Tải ảnh về & Chuyển sang Base64
+                        const downloadUrl = `https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${filePath}`;
+                        const imageRes = await axios.get(downloadUrl, { responseType: 'arraybuffer' });
+                        const base64Image = Buffer.from(imageRes.data, 'binary').toString('base64');
+                        const imgSrc = `data:image/jpeg;base64,${base64Image}`;
+
+                        // 4. Gửi ảnh qua Socket (Sự kiện riêng: admin_reply_image)
+                        io.to(userSocketId).emit('admin_reply_image', imgSrc);
+                        console.log(`📸 Đã chuyển ẢNH tới Socket: ${userSocketId}`);
+
+                        // Nếu có kèm caption (chú thích ảnh) thì gửi thêm text
+                        if (message.caption) {
+                            io.to(userSocketId).emit('admin_reply', message.caption);
+                        }
+
+                    } catch (imgError) {
+                        console.error("Lỗi xử lý ảnh:", imgError.message);
+                        io.to(userSocketId).emit('admin_reply', "[Lỗi: Admin gửi ảnh nhưng hệ thống không tải được]");
+                    }
+                } 
+                // --- TRƯỜNG HỢP 2: ADMIN GỬI TEXT ---
+                else if (message.text) {
+                    const adminReply = message.text; 
+                    io.to(userSocketId).emit('admin_reply', adminReply);
+                    console.log(`✅ Đã chuyển TEXT tới Socket: ${userSocketId}`);
+                }
             }
         }
         res.sendStatus(200);

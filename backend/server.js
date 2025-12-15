@@ -1,5 +1,4 @@
-
-// server.js - Phiên bản Fix Lỗi: Prompt Gốc + Diễn Giải (Bypass Recitation)
+// server.js - Phiên bản: Tự động chuyển câu hỏi khó về Telegram
 
 const express = require('express');
 const axios = require('axios');
@@ -31,7 +30,7 @@ app.get('/api/health', (req, res) => {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// --- HÀM GỬI CẢNH BÁO TELEGRAM (Thêm mới) ---
+// --- HÀM GỬI CẢNH BÁO TELEGRAM (Dùng chung) ---
 async function sendTelegramAlert(message) {
     if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT_ID) return; 
     
@@ -47,26 +46,21 @@ async function sendTelegramAlert(message) {
     }
 }
 
-// --- 2. HÀM GỌI API (Có báo lỗi Telegram) ---
+// --- 2. HÀM GỌI API GEMINI (Có báo lỗi Telegram) ---
 async function callGeminiWithRetry(payload, keyIndex = 0, retryCount = 0) {
     if (keyIndex >= apiKeys.length) {
-        // Thử lại vòng 1 nếu chưa retry
         if (retryCount < 1) {
             console.log("🔁 Hết vòng Key, chờ 2s thử lại...");
             await sleep(2000);
             return callGeminiWithRetry(payload, 0, retryCount + 1);
         }
-
-        // ---> BÁO ĐỘNG HẾT KEY <---
         const msg = "🆘 HẾT SẠCH API KEY! Hệ thống không thể phản hồi.";
         console.error(msg);
         await sendTelegramAlert(msg);
-        
         throw new Error("ALL_KEYS_EXHAUSTED");
     }
 
     const currentKey = apiKeys[keyIndex];
-    // Dùng model ổn định
     const model = "gemini-2.5-flash"; 
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${currentKey}`;
 
@@ -78,7 +72,6 @@ async function callGeminiWithRetry(payload, keyIndex = 0, retryCount = 0) {
         return response;
     } catch (error) {
         const status = error.response ? error.response.status : 0;
-        
         if (status === 429 || status === 400 || status === 403 || status >= 500) {
             console.warn(`⚠️ Key ${keyIndex} lỗi (Mã: ${status}). Đổi Key...`);
             if (status === 429) await sleep(1000); 
@@ -88,6 +81,7 @@ async function callGeminiWithRetry(payload, keyIndex = 0, retryCount = 0) {
     }
 }
 
+// --- API CHAT CHÍNH ---
 app.post('/api/chat', async (req, res) => {
     if (apiKeys.length === 0) return res.status(500).json({ error: 'Chưa cấu hình API Key.' });
 
@@ -103,14 +97,14 @@ app.post('/api/chat', async (req, res) => {
         ];
 
         // =================================================================================
-        // BƯỚC 1: PROMPT GỐC (Ưu tiên trích dẫn chính xác)
+        // BƯỚC 1: PROMPT GỐC (ĐÃ SỬA LOGIC "NO_INFO_FOUND")
         // =================================================================================
         const promptGoc = `Bạn là một công cụ trích xuất thông tin chính xác tuyệt đối. Nhiệm vụ của bạn là trích xuất câu trả lời cho câu hỏi của người dùng CHỈ từ trong VĂN BẢN NGUỒN được cung cấp.
 
         **QUY TẮC BẮT BUỘC PHẢI TUÂN THEO TUYỆT ĐỐI:**
         1.  **NGUỒN DỮ LIỆU DUY NHẤT:** Chỉ được phép sử dụng thông tin có trong phần "VĂN BẢN NGUỒN". TUYỆT ĐỐI KHÔNG sử dụng kiến thức bên ngoài.
         2.  **CHIA NHỎ:** Không viết thành đoạn văn. Hãy tách từng ý quan trọng thành các gạch đầu dòng riêng biệt.          
-        3.  **XỬ LÝ KHI KHÔNG TÌM THẤY:** Nếu thông tin không có trong văn bản nguồn, BẮT BUỘC trả lời chính xác câu: "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site ."
+        3.  **XỬ LÝ KHI KHÔNG TÌM THẤY (QUAN TRỌNG):** Nếu thông tin không có trong văn bản nguồn, BẮT BUỘC trả lời chính xác cụm từ: "NO_INFO_FOUND" (Không thêm bớt).
         4.  **XƯNG HÔ:** Bạn tự xưng là "đệ" và gọi người hỏi là "Sư huynh".
         5.  **CHUYỂN ĐỔI NGÔI KỂ:** Chuyển "con/trò" thành "Sư huynh".
         6.  **XỬ LÝ LINK:** Trả về URL thuần túy, KHÔNG dùng Markdown link.
@@ -137,58 +131,69 @@ app.post('/api/chat', async (req, res) => {
             const candidate = response.data.candidates[0];
             finishReason = candidate.finishReason;
             if (candidate.content?.parts?.[0]?.text) {
-                aiResponse = candidate.content.parts[0].text;
+                aiResponse = candidate.content.parts[0].text.trim();
             }
         }
 
         // =================================================================================
-        // BƯỚC 2: CHIẾN THUẬT CỨU NGUY - DIỄN GIẢI Ý CHÍNH (Thay thế chiến thuật cũ)
+        // BƯỚC 2: CHIẾN THUẬT CỨU NGUY (Nếu bị chặn bản quyền)
         // =================================================================================
         if (finishReason === "RECITATION" || !aiResponse) {
-            console.log("⚠️ Prompt Gốc bị chặn. Kích hoạt Chiến thuật Diễn Giải (Paraphrasing)...");
+            console.log("⚠️ Prompt Gốc bị chặn. Kích hoạt Chiến thuật Diễn Giải...");
 
-            // CHIẾN THUẬT MỚI: Tóm lược/Viết lại ý chính để vượt tường lửa bản quyền
             const promptDienGiai = `Bạn là trợ lý hỗ trợ tu tập.
             NV: Trả lời câu hỏi: "${question}" dựa trên VĂN BẢN NGUỒN.
             
-            VẤN ĐỀ: Việc trích dẫn nguyên văn đang bị lỗi hệ thống (Recitation Error).
+            VẤN ĐỀ: Việc trích dẫn nguyên văn đang bị lỗi hệ thống.
             
-            GIẢI PHÁP (BẮT BUỘC):
-            1. **ĐỌC HIỂU:** Tìm các ý chính liên quan đến câu hỏi.
-            2. **DIỄN ĐẠT LẠI (QUAN TRỌNG):** Viết lại các ý đó dưới dạng liệt kê gạch đầu dòng.
-               - Dùng ngôn ngữ ngắn gọn, súc tích hơn.
-               - **TUYỆT ĐỐI KHÔNG** làm sai lệch ý nghĩa giáo lý.
-               - Giữ nguyên các thuật ngữ Phật học (Ví dụ: tên Chú, tên Bồ Tát, các danh từ riêng...).
-            3. **XƯNG HÔ:** Bắt đầu bằng câu: "Do hạn chế về bản quyền trích dẫn, đệ xin tóm lược các ý chính như sau:".
+            GIẢI PHÁP:
+            1. Tìm ý chính trong văn bản.
+            2. Nếu KHÔNG CÓ thông tin, trả lời: "NO_INFO_FOUND".
+            3. Nếu CÓ, hãy diễn đạt lại ý đó, bắt đầu bằng: "Do hạn chế về bản quyền trích dẫn, đệ xin tóm lược các ý chính như sau:".
 
             --- VĂN BẢN NGUỒN ---
             ${context}
             --- HẾT ---`;
 
-            // Gọi API lần 2 (Lưu ý: Đã sửa lại tên biến thành promptDienGiai để khớp)
             response = await callGeminiWithRetry({
-                contents: [{ parts: [{ text: promptDienGiai }] }], // <-- ĐÃ SỬA TÊN BIẾN Ở ĐÂY
+                contents: [{ parts: [{ text: promptDienGiai }] }],
                 safetySettings: safetySettings,
                 generationConfig: { temperature: 0.3, maxOutputTokens: 4096 }
             }, 0);
 
-            if (response.data && response.data.candidates && response.data.candidates.length > 0) {
-                const candidate = response.data.candidates[0];
-                if (candidate.content?.parts?.[0]?.text) {
-                    aiResponse = candidate.content.parts[0].text;
-                } else {
-                    aiResponse = "Nội dung này Google chặn tuyệt đối (Recitation). Sư huynh vui lòng xem trực tiếp trong sách ạ.";
-                }
+            if (response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+                aiResponse = response.data.candidates[0].content.parts[0].text.trim();
+            } else {
+                aiResponse = "NO_INFO_FOUND"; // Coi như không tìm thấy nếu lỗi hẳn
             }
         }
 
         // =================================================================================
-        // TRẢ KẾT QUẢ CUỐI CÙNG
+        // BƯỚC 3: XỬ LÝ KẾT QUẢ CUỐI CÙNG & GỬI TELEGRAM
         // =================================================================================
+        
         let finalAnswer = "";
-        if (aiResponse.includes("mucluc.pmtl.site") || aiResponse.includes("NONE")) {
-             finalAnswer = "Mời Sư huynh tra cứu thêm tại mục lục tổng quan : https://mucluc.pmtl.site .";
+
+        // Kiểm tra xem AI có tìm được thông tin không
+        // Nếu AI trả về "NO_INFO_FOUND" hoặc câu báo lỗi cũ
+        if (aiResponse.includes("NO_INFO_FOUND") || aiResponse.includes("mucluc.pmtl.site") || aiResponse.length < 5) {
+            
+            console.log("⚠️ Không tìm thấy câu trả lời -> Đang chuyển về Telegram...");
+
+            // 1. Gửi tin nhắn báo động về nhóm Telegram
+            await sendTelegramAlert(
+                `❓ <b>CÂU HỎI CẦN HỖ TRỢ (Từ Chatbot Txt)</b>\n\n` +
+                `User hỏi: "${question}"\n\n` +
+                `👉 <i>Admin vui lòng kiểm tra và hỗ trợ Sư huynh này nhé!</i>`
+            );
+
+            // 2. Trả lời cho người dùng trên Web
+            finalAnswer = "Dạ, câu hỏi này hiện chưa có trong dữ liệu văn bản mà đệ đang nắm giữ.\n\n" +
+                          "🚀 **Đệ đã chuyển câu hỏi của Sư huynh về nhóm hỗ trợ trên Telegram.**\n" +
+                          "Các Phụng Sự Viên sẽ xem và cập nhật dữ liệu sớm nhất có thể. Sư huynh hoan hỷ chờ trong giây lát hoặc đặt câu hỏi khác nhé! 🙏";
+
         } else {
+            // Trường hợp CÓ câu trả lời
             finalAnswer = "**Phụng Sự Viên Ảo Trả Lời :**\n\n" + aiResponse + "\n\n_Nhắc nhở: Sư huynh kiểm tra lại tại: https://tkt.pmtl.site nhé 🙏_";
         }
 
@@ -197,7 +202,7 @@ app.post('/api/chat', async (req, res) => {
     } catch (error) {
         let msg = "Lỗi hệ thống.";
         if (error.message === "ALL_KEYS_EXHAUSTED") {
-            msg = "Hệ thống đang quá tải, tất cả các Key đều đang bận. Vui lòng thử lại sau 1-2 phút.";
+            msg = "Hệ thống đang quá tải. Vui lòng thử lại sau 1-2 phút.";
         }
         console.error("Final Error Handler:", error.message);
         await sendTelegramAlert(`❌ LỖI HỆ THỐNG:\n${error.message}`);
@@ -205,10 +210,10 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-// --- API TEST TELEGRAM (Thêm mới) ---
+// --- API TEST TELEGRAM ---
 app.get('/api/test-telegram', async (req, res) => {
     try {
-        await sendTelegramAlert("🚀 <b>Test kết nối thành công!</b>\nChatbot đã sẵn sàng báo lỗi.");
+        await sendTelegramAlert("🚀 <b>Test kết nối thành công!</b>\nChatbot Txt đã sẵn sàng.");
         res.json({ success: true, message: "Đã gửi tin nhắn test." });
     } catch (error) {
         res.status(500).json({ error: error.message });

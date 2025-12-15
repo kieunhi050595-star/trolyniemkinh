@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Phụng Sự Viên Ảo - Vô Úy</title>
     <link href="/dist/output.css" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Quicksand:wght@400;500;700&display=swap" rel="stylesheet">
@@ -12,78 +13,54 @@
     <style>
         /* CSS tùy chỉnh */
         html, body {
-            overflow: hidden; /* Ngăn cuộn toàn bộ trang */
+            overflow: hidden; 
             font-family: 'Quicksand', sans-serif; 
             background-color: #F5F5DC;
         }
         .font-title { 
             font-family: 'Playfair Display', serif; 
         }
-        #chat-messages::-webkit-scrollbar { 
-            width: 8px; 
-        }
-        #chat-messages::-webkit-scrollbar-track { 
-            background: #EFEBE9; 
-        }
-        #chat-messages::-webkit-scrollbar-thumb { 
-            background: #A1887F; 
-            border-radius: 4px; 
-        }
-        #chat-messages::-webkit-scrollbar-thumb:hover { 
-            background: #8D6E63; 
-        }
+        #chat-messages::-webkit-scrollbar { width: 8px; }
+        #chat-messages::-webkit-scrollbar-track { background: #EFEBE9; }
+        #chat-messages::-webkit-scrollbar-thumb { background: #A1887F; border-radius: 4px; }
+        #chat-messages::-webkit-scrollbar-thumb:hover { background: #8D6E63; }
+        
         .message-bubble p {
             font-size: 18px;
             line-height: 1.6;
-            word-break: break-word; /* Để link dài không làm vỡ layout */
-        }
-        /* START: CSS ĐỂ GIẢI QUYẾT DỨT ĐIỂM VẤN ĐỀ POPUP */
-        .message-bubble a {
-            color: #FFD700 !important; /* Đổi thành màu vàng (Gold) */
-            text-decoration: none !important; /* Xóa gạch chân */
-            font-weight: 700 !important; /* Tăng độ đậm để dễ đọc trên nền đỏ */
-        }
-        /* Hiệu ứng khi di chuột vào link (tùy chọn thêm cho đẹp) */
-        .message-bubble a:hover {
-             text-decoration: underline !important; /* Di chuột vào sẽ hiện gạch chân */
-        }
-        /* END: CSS ĐỂ GIẢI QUYẾT DỨT ĐIỂM VẤN ĐỀ POPUP */
-        /* THÊM ĐOẠN NÀY VÀO CUỐI PHẦN <style> */
-        .message-bubble b, 
-        .message-bubble strong,
-        .font-bold {
-            font-weight: 700 !important;
+            word-break: break-word; 
         }
 
-        .message-bubble i, 
-        .message-bubble em,
-        .italic {
-            font-style: italic !important;
+        /* CSS Link màu vàng */
+        .message-bubble a {
+            color: #FFD700 !important; 
+            text-decoration: none !important; 
+            font-weight: 700 !important; 
         }
+        .message-bubble a:hover {
+             text-decoration: underline !important; 
+        }
+
+        .message-bubble b, .message-bubble strong, .font-bold { font-weight: 700 !important; }
+        .message-bubble i, .message-bubble em, .italic { font-style: italic !important; }
 
         .bot-custom-theme {
-                    background-color: #6d2121 !important; /* Màu Nâu đỏ đậm */
-                    color: #FFD700 !important;            /* Màu Vàng kim (Gold) */
+            background-color: #6d2121 !important; 
+            color: #FFD700 !important;            
         }
     </style>
 </head>
 <body class="bg-stone-100 text-stone-800">
 
-    <!-- Container chính -->
     <div class="w-screen flex flex-col bg-white" style="height: var(--app-height, 100vh);">
         
-        <!-- Header -->
         <div class="text-center py-4 border-b border-stone-200 shadow-sm flex-shrink-0">
             <h1 class="font-title text-2xl md:text-3xl font-bold text-amber-800">Phụng Sự Viên Ảo "Vô Úy"</h1>
             <p class="text-stone-500 text-sm mt-1">Pháp Môn Tâm Linh 心靈法門 (<a href="https://nhomcongtu.pmtl.site" target="_blank">nhomcongtu.pmtl.site</a>)</p>
         </div>
 
-        <!-- Khu vực tin nhắn -->
-        <div id="chat-messages" class="flex-1 p-4 md:p-6 overflow-y-auto bg-stone-50">
-            <!-- Tin nhắn sẽ được thêm bằng JavaScript -->
-        </div>
+        <div id="chat-messages" class="flex-1 p-4 md:p-6 overflow-y-auto bg-stone-50"></div>
 
-        <!-- Form nhập liệu -->
         <div class="p-4 bg-white border-t border-stone-200 shadow-inner flex-shrink-0">
             <div class="flex items-center bg-stone-100 rounded-full p-2">
                 <input type="text" id="user-input" placeholder="Đang chuẩn bị..." class="flex-1 bg-transparent px-4 py-2 text-stone-700 text-lg focus:outline-none" autocomplete="off" disabled>
@@ -95,82 +72,84 @@
     </div>
 
     <script>
-        // --- SỬA LỖI CHIỀU CAO TRÊN MOBILE ---
+        // === 1. KHAI BÁO CẤU HÌNH TRƯỚC (QUAN TRỌNG) ===
+        const BACKEND_API_URL = "https://trolyniemkinh.onrender.com";
+        const DEFAULT_DOCUMENT_URL = "https://gist.githubusercontent.com/kieunhi050595-star/ddecde18f83b77d06a117a9fcf349188/raw/dulieu.txt";
+        let documentContext = "";
+        
+        // DOM Elements
+        const chatMessages = document.getElementById('chat-messages');
+        const userInput = document.getElementById('user-input');
+        const sendButton = document.getElementById('send-button');
+
+        // === 2. KẾT NỐI SOCKET (Sau khi đã có URL) ===
+        const socket = io(BACKEND_API_URL.replace(/\/$/, "")); 
+        let mySocketId = "";
+        
+        socket.on("connect", () => {
+            mySocketId = socket.id; 
+            console.log("✅ Đã kết nối Socket:", mySocketId);
+        });
+        
+        socket.on("admin_reply", (msg) => {
+            // Hiện tin nhắn Admin
+            addMessage("**Ban Quản Trị Trả Lời:**\n\n" + msg, 'bot');
+            
+            // Âm thanh
+            try { new Audio('https://www.soundjay.com/buttons/sounds/button-3.mp3').play().catch(e=>{}); } catch(e){}
+        });
+
+        // === 3. CÁC HÀM XỬ LÝ GIAO DIỆN ===
+        
+        // Fix lỗi chiều cao Mobile
         const setAppHeight = () => {
             document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`);
         }
         window.addEventListener('resize', setAppHeight);
         setAppHeight();
-        // --- KẾT THÚC SỬA LỖI ---
 
-        // === THÔNG TIN CẤU HÌNH QUAN TRỌNG ===
-        const BACKEND_API_URL = "https://trolyniemkinh.onrender.com";
-        const DEFAULT_DOCUMENT_URL = "https://gist.githubusercontent.com/kieunhi050595-star/ddecde18f83b77d06a117a9fcf349188/raw/dulieu.txt";
-        let documentContext = "";
-        // ===================================
-
-        const chatMessages = document.getElementById('chat-messages');
-        const userInput = document.getElementById('user-input');
-        const sendButton = document.getElementById('send-button');
-
-        // --- Bắt sự kiện click để mở link trong tab mới ---
+        // Xử lý click link
         chatMessages.addEventListener('click', function(event) {
             const linkElement = event.target.closest('a');
             if (linkElement) {
                 event.preventDefault();
                 const url = linkElement.href;
-                if (url) {
-                    window.open(url, '_blank', 'noopener,noreferrer');
-                }
+                if (url) window.open(url, '_blank', 'noopener,noreferrer');
             }
         });
 
+        // Tải tài liệu khi mở trang
         window.addEventListener('load', async () => {
-            //addMessage('Đang chuẩn bị...', 'bot', 'info');
             try {
                 const response = await fetch(DEFAULT_DOCUMENT_URL);
-                if (!response.ok) {
-                    throw new Error(`Không thể tải tệp (status: ${response.status})`);
-                }
+                if (!response.ok) throw new Error(`Status: ${response.status}`);
                 documentContext = await response.text();
+                
                 addMessage('Đệ chào Sư huynh ! Sư huynh cứ đặt câu hỏi ạ?', 'bot');
                 userInput.disabled = false;
                 userInput.placeholder = "Nhập câu hỏi của bạn...";
             } catch (error) {
-                console.error("Lỗi khi tải tài liệu mặc định:", error);
-                addMessage(`Lỗi khi tải tài liệu: ${error.message}`, 'bot', 'error');
-                userInput.placeholder = "Tải tài liệu thất bại!";
+                console.error("Lỗi tải tài liệu:", error);
+                addMessage(`Lỗi tải dữ liệu: ${error.message}`, 'bot', 'error');
+                userInput.placeholder = "Lỗi kết nối dữ liệu!";
             }
         });
 
-        /**
-         * Hàm xử lý link và văn bản.
-         * @param {string} text - Văn bản đầu vào.
-         * @returns {string} - Chuỗi HTML đã được xử lý.
-         */
         function linkifyAndSanitize(text) {
-            if (typeof text !== 'string') {
-                return '';
-            }
+            if (typeof text !== 'string') return '';
 
-            // 1. An toàn hóa văn bản
             const sanitizerDiv = document.createElement('div');
             sanitizerDiv.textContent = text;
             let sanitizedText = sanitizerDiv.innerHTML;
 
-            // 2. Xử lý In Đậm: **text** -> <span class="font-bold">text</span>
-            // Sử dụng class 'font-bold' của Tailwind
+            // In Đậm & Nghiêng
             sanitizedText = sanitizedText.replace(/\*\*(.*?)\*\*/g, '<span class="font-bold">$1</span>');
-
-            // 3. Xử lý In Nghiêng: _text_ -> <span class="italic">text</span>
-            // Sử dụng class 'italic' của Tailwind
             sanitizedText = sanitizedText.replace(/_(.*?)_/g, '<span class="italic">$1</span>');
 
-            // 4. Xử lý Link
+            // Tạo Link
             const urlRegex = /(https?:\/\/[^\s<>"']+)/g;
             const linkifiedText = sanitizedText.replace(urlRegex, '<a href="$&" target="_blank" rel="noopener noreferrer">$&</a>');
 
-            // 5. Xử lý xuống dòng
             return linkifiedText.replace(/\n/g, '<br>');
         }
 
@@ -212,17 +191,18 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     question: question,
-                    context: context
+                    context: context,
+                    socketId: mySocketId // Gửi kèm Socket ID
                 })
             });
 
             if (!response.ok) {
-                let errorText = `Lỗi HTTP: ${response.status} ${response.statusText}`;
+                let errorText = `Lỗi HTTP: ${response.status}`;
                 try {
                     const errorData = await response.json();
                     errorText = `Đệ xin lỗi: ${errorData.error || response.statusText}`;
                 } catch (e) {
-                    errorText = `Server trả về lỗi không phải JSON (status: ${response.status}). Vui lòng kiểm tra lại địa chỉ BACKEND_API_URL.`;
+                    errorText = `Lỗi kết nối Server.`;
                 }
                 throw new Error(errorText);
             }
@@ -242,14 +222,14 @@
 
             try {
                 const answer = await callBackendAPI(userQuestion, documentContext);
-                console.log("Dữ liệu gốc từ API:", answer);
                 addMessage(answer, 'bot');
             } catch (error) {
-                console.error("Lỗi chi tiết:", error);
+                console.error("Lỗi:", error);
                 addMessage(error.message, 'bot', 'error');
             } finally {
                 sendButton.disabled = false;
                 sendButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"></path><path d="M22 2L15 22l-4-9-9-4 22-2z"></path></svg>';
+                userInput.focus();
             }
         }
 

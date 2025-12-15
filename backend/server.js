@@ -13,21 +13,25 @@ const PORT = process.env.PORT || 3001;
 // --- CẤU HÌNH SOCKET.IO ---
 const server = http.createServer(app); // Bọc app trong server http
 const io = new Server(server, {
-    cors: { origin: "*" } // Cho phép mọi nguồn kết nối
+    cors: { origin: "*" }
 });
 
 // Biến lưu trữ tạm: [ID Tin nhắn Telegram] -> [Socket ID người dùng]
 const pendingRequests = new Map();
+const socketToMsgId = new Map();
 
 io.on('connection', (socket) => {
     console.log('👤 User Connected:', socket.id);
 
     socket.on('disconnect', () => {
         console.log('User Disconnected:', socket.id);
-        // Dọn dẹp bộ nhớ khi user thoát
+        
+        // Dọn dẹp bộ nhớ khi user thoát (Chỉ chạy khi biến socketToMsgId đã được khai báo)
         if (socketToMsgId.has(socket.id)) {
             const msgIds = socketToMsgId.get(socket.id);
+            // Xóa các request đang treo của user này
             msgIds.forEach(id => pendingRequests.delete(id));
+            // Xóa user khỏi danh sách quản lý
             socketToMsgId.delete(socket.id);
         }
     });

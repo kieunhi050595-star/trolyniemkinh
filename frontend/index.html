@@ -200,7 +200,7 @@
             sanitizedText = sanitizedText.replace(/\*\*(.*?)\*\*/g, '<span class="font-bold">$1</span>');
             sanitizedText = sanitizedText.replace(/_(.*?)_/g, '<span class="italic">$1</span>');
             const urlRegex = /(https?:\/\/[^\s<>"']+)/g;
-            const linkifiedText = sanitizedText.replace(urlRegex, '<a href="$&" target="_blank" rel="noopener noreferrer">🔗 Link</a>');
+            const linkifiedText = sanitizedText.replace(urlRegex, '<a href="$&" target="_blank" rel="noopener noreferrer">Liên Kết</a>');
             return linkifiedText.replace(/\n/g, '<br>');
         }
 

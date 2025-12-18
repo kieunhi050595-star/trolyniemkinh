@@ -66,7 +66,7 @@ async function sendTelegramAlert(message) {
         const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
         await axios.post(url, {
             chat_id: TELEGRAM_CHAT_ID,
-            text: `🤖 <b>PSV ẢO - VÔ ÚY</b> 🚨\n\n${message}`,
+            text: `🤖 <b>PSV Ảo "Vô Úy"</b> 🚨\n\n${message}`,
             parse_mode: 'HTML'
         });
     } catch (error) {
@@ -240,11 +240,14 @@ app.post('/api/chat', async (req, res) => {
 
         if (aiResponse.includes("NO_INFO_FOUND") || aiResponse.length < 5) {
             console.log("⚠️ Không tìm thấy -> Chuyển Telegram...");
-
-            // 1. Gửi tin nhắn vào nhóm (Lưu lại msgId để chờ reply)
+        
+            // 1. Gửi tin nhắn vào nhóm (THÊM SOCKET ID VÀO CUỐI TIN NHẮN)
+            // Dùng thẻ <pre> để giấu ID hoặc làm nó dễ parse, nhưng hiển thị rõ cho Admin biết
+            const msgContent = `❓ <b>CÂU HỎI CẦN HỖ TRỢ</b>\n\n"${question}"\n\n👉 <i>Reply tin nhắn này để trả lời.</i>\n\n<pre>ID:${socketId}</pre>`;
+        
             const teleRes = await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
                 chat_id: TELEGRAM_CHAT_ID,
-                text: `❓ <b>CÂU HỎI CẦN HỖ TRỢ</b>\n\n"${question}"\n\n👉 <i>Reply tin nhắn này để trả lời.</i>`,
+                text: msgContent,
                 parse_mode: 'HTML'
             });
 
@@ -280,29 +283,42 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-// Route nhận tin nhắn từ Telegram (Không cần Token trên URL để tránh sai sót)
 app.post('/api/telegram-webhook', async (req, res) => {
     try {
         const { message } = req.body;
-        
-        // Log để kiểm tra xem Telegram có gọi vào đây không
         console.log("📩 Webhook received update:", message ? message.message_id : "No message");
 
         // Chỉ xử lý nếu là tin nhắn Reply
         if (message && message.reply_to_message) {
-            const originalMsgId = message.reply_to_message.message_id; 
+            const replyMsg = message.reply_to_message;
+            const originalMsgId = replyMsg.message_id; 
             
-            // Log kiểm tra ID tin nhắn gốc
-            console.log(`🔎 Checking waiting list for MsgID: ${originalMsgId}`);
-            
-            // Kiểm tra xem có user nào đang chờ tin nhắn này không
-            if (pendingRequests.has(originalMsgId)) {
-                const userSocketId = pendingRequests.get(originalMsgId);
-                console.log(`✅ Found Socket User: ${userSocketId}`);
+            // --- LOGIC MỚI: TÌM SOCKET ID ---
+            let userSocketId = null;
 
-                // --- TRƯỜNG HỢP 1: ADMIN GỬI ẢNH ---
+            // Cách 1: Tìm trong RAM (Ưu tiên nếu server chưa restart)
+            if (pendingRequests.has(originalMsgId)) {
+                userSocketId = pendingRequests.get(originalMsgId);
+                console.log(`✅ Found User in RAM: ${userSocketId}`);
+            } 
+            // Cách 2: Tìm trong nội dung tin nhắn gốc (Dự phòng khi mất RAM)
+            else if (replyMsg.text || replyMsg.caption) {
+                const originalText = replyMsg.text || replyMsg.caption || "";
+                // Tìm chuỗi "ID:..." mà ta đã nhét vào ở Bước 1
+                const match = originalText.match(/ID:([a-zA-Z0-9_-]+)/);
+                if (match && match[1]) {
+                    userSocketId = match[1];
+                    console.log(`✅ Found User in Message Text: ${userSocketId}`);
+                }
+            }
+
+            // Nếu tìm thấy User thì gửi tin
+            if (userSocketId) {
+                // ... (Code gửi admin_reply/admin_reply_image GIỮ NGUYÊN như cũ)
+                // Copy đoạn if (message.photo) ... else if (message.text) ... vào đây
                 if (message.photo) {
-                    try {
+                    // ... xử lý ảnh ...
+                     try {
                         const fileId = message.photo[message.photo.length - 1].file_id;
                         const getFileUrl = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${fileId}`;
                         const fileInfoRes = await axios.get(getFileUrl);
@@ -320,13 +336,11 @@ app.post('/api/telegram-webhook', async (req, res) => {
                     } catch (imgError) {
                         console.error("❌ Lỗi xử lý ảnh:", imgError.message);
                     }
-                } 
-                // --- TRƯỜNG HỢP 2: ADMIN GỬI TEXT ---
-                else if (message.text) {
+                } else if (message.text) {
                     io.to(userSocketId).emit('admin_reply', message.text);
                 }
             } else {
-                console.log("⚠️ Không tìm thấy User nào khớp với tin nhắn Reply này (Có thể do Server đã khởi động lại làm mất bộ nhớ RAM).");
+                console.log("⚠️ Không tìm thấy User (RAM trống và không có ID trong tin nhắn).");
             }
         }
         res.sendStatus(200);

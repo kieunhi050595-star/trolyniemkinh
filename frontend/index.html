@@ -31,11 +31,25 @@
             word-break: break-word; 
         }
 
-        /* CSS Link màu vàng */
+        /* CSS Link dạng nút bấm */
         .message-bubble a {
-            color: #FFD700 !important; 
-            text-decoration: none !important; 
-            font-weight: 700 !important; 
+            display: inline-block;          /* Để hiển thị dạng khối/nút */
+            background-color: #FFD700;      /* Màu nền Vàng */
+            color: #8B0000 !important;      /* Chữ màu Nâu Đỏ (Dark Red) */
+            padding: 5px 12px;              /* Khoảng cách lề trong nút */
+            border-radius: 20px;            /* Bo tròn góc nút */
+            text-decoration: none !important;
+            font-weight: 700 !important;
+            font-size: 14px;                /* Cỡ chữ nút nhỏ gọn hơn một chút */
+            margin: 2px 0;                  /* Khoảng cách giữa các nút */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2); /* Đổ bóng nhẹ cho đẹp */
+            transition: all 0.2s;           /* Hiệu ứng mượt khi di chuột */
+        }
+
+        .message-bubble a:hover {
+             background-color: #FFC107;     /* Màu vàng đậm hơn khi di chuột */
+             transform: translateY(-1px);   /* Nút nổi lên nhẹ khi di chuột */
+             text-decoration: none !important;
         }
         .message-bubble a:hover {
              text-decoration: underline !important; 
@@ -186,7 +200,7 @@
             sanitizedText = sanitizedText.replace(/\*\*(.*?)\*\*/g, '<span class="font-bold">$1</span>');
             sanitizedText = sanitizedText.replace(/_(.*?)_/g, '<span class="italic">$1</span>');
             const urlRegex = /(https?:\/\/[^\s<>"']+)/g;
-            const linkifiedText = sanitizedText.replace(urlRegex, '<a href="$&" target="_blank" rel="noopener noreferrer">$&</a>');
+            const linkifiedText = sanitizedText.replace(urlRegex, '<a href="$&" target="_blank" rel="noopener noreferrer">🔗 Link</a>');
             return linkifiedText.replace(/\n/g, '<br>');
         }
 

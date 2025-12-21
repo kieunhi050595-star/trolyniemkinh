@@ -178,15 +178,27 @@
 
         window.addEventListener('load', async () => {
             try {
-                const response = await fetch(DEFAULT_DOCUMENT_URL);
+                // 1. Tạo mã thời gian để bắt buộc tải mới (Chống cache)
+                const timeStamp = new Date().getTime();
+                const freshUrl = `${DEFAULT_DOCUMENT_URL}?v=${timeStamp}`;
+                
+                // 2. Tải dữ liệu từ URL mới này
+                const response = await fetch(freshUrl); 
                 if (!response.ok) throw new Error(`Status: ${response.status}`);
+                
                 documentContext = await response.text();
                 
-                addMessage('Đệ chào Sư huynh ! Sư huynh cứ đặt câu hỏi ạ?', 'bot');
+                // 3. Lấy dòng đầu tiên làm thông tin phiên bản
+                // (Nếu file trống thì hiện chữ "Mới nhất")
+                const firstLine = documentContext.split('\n')[0] || "Mới nhất";
+
+                // 4. Hiển thị lời chào kèm phiên bản
+                addMessage(`Đệ chào Sư huynh! Sư huynh cứ đặt câu hỏi ạ? (Dữ liệu: ${firstLine})`, 'bot');
+                
                 userInput.disabled = false;
-                userInput.placeholder = "Nhập câu hỏi của bạn...";
+                userInput.placeholder = "Nhập câu hỏi của Sư huynh...";
             } catch (error) {
-                console.error("Lỗi tải tài liệu:", error);
+                console.error("Lỗi tải dữ liệu:", error);
                 addMessage(`Lỗi tải dữ liệu: ${error.message}`, 'bot', 'error');
                 userInput.placeholder = "Lỗi kết nối dữ liệu!";
             }

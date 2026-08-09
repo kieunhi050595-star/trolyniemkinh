@@ -20,6 +20,9 @@ const io = new Server(server, {
 const pendingRequests = new Map();
 const socketToMsgId = new Map();
 
+const FB_VERIFY_TOKEN = process.env.FB_VERIFY_TOKEN || "";
+const FB_PAGE_ACCESS_TOKEN = process.env.FB_PAGE_ACCESS_TOKEN || "";
+
 io.on('connection', (socket) => {
     console.log('👤 User Connected:', socket.id);
 
@@ -39,6 +42,20 @@ io.on('connection', (socket) => {
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
+
+// --- HÀM TẢI KIẾN THỨC CHO FACEBOOK MESSENGER ---
+const DEFAULT_DOCUMENT_URL = "https://gist.githubusercontent.com/kieunhi050595-star/ddecde18f83b77d06a117a9fcf349188/raw/dulieu.txt";
+
+async function fetchDocumentContext() {
+    try {
+        const timeStamp = new Date().getTime();
+        const response = await axios.get(`${DEFAULT_DOCUMENT_URL}?v=${timeStamp}`);
+        return response.data;
+    } catch (error) {
+        console.error("Lỗi tải file dữ liệu .txt:", error.message);
+        return ""; // Trả về chuỗi rỗng nếu lỗi
+    }
+}
 
 // --- 1. XỬ LÝ DANH SÁCH KEY ---
 const rawKeys = process.env.GEMINI_API_KEYS || "";
@@ -71,6 +88,20 @@ async function sendTelegramAlert(message) {
         });
     } catch (error) {
         console.error("Lỗi gửi Telegram:", error.message);
+    }
+}
+
+// --- HÀM GỬI TIN NHẮN TRẢ LỜI CHO FACEBOOK MESSENGER ---
+async function sendFacebookMessage(senderPsid, text) {
+    if (!FB_PAGE_ACCESS_TOKEN) return;
+    try {
+        const url = `https://graph.facebook.com/v19.0/me/messages?access_token=${FB_PAGE_ACCESS_TOKEN}`;
+        await axios.post(url, {
+            recipient: { id: senderPsid },
+            message: { text: text }
+        });
+    } catch (error) {
+        console.error("Lỗi gửi tin nhắn FB:", error.response ? error.response.data : error.message);
     }
 }
 
@@ -356,6 +387,100 @@ app.get('/api/test-telegram', async (req, res) => {
         await sendTelegramAlert("🚀 <b>Test kết nối thành công!</b>");
         res.json({ success: true });
     } catch (error) { res.status(500).json({ error: error.message }); }
+});
+
+// --- API GET: FACEBOOK XÁC MINH WEBHOOK ---
+app.get('/api/facebook-webhook', (req, res) => {
+    let mode = req.query['hub.mode'];
+    let token = req.query['hub.verify_token'];
+    let challenge = req.query['hub.challenge'];
+
+    if (mode && token) {
+        if (mode === 'subscribe' && token === FB_VERIFY_TOKEN) {
+            console.log('✅ WEBHOOK FACEBOOK VERIFIED');
+            res.status(200).send(challenge);
+        } else {
+            res.sendStatus(403);
+        }
+    }
+});
+
+// --- API POST: NHẬN TIN NHẮN TỪ FACEBOOK ---
+app.post('/api/facebook-webhook', async (req, res) => {
+    let body = req.body;
+
+    // Facebook yêu cầu phải trả về 200 OK ngay lập tức để không bị timeout
+    res.status(200).send('EVENT_RECEIVED');
+
+    if (body.object === 'page') {
+        for (const entry of body.entry) {
+            let webhook_event = entry.messaging[0];
+            let sender_psid = webhook_event.sender.id;
+
+            if (webhook_event.message && webhook_event.message.text) {
+                let userQuestion = webhook_event.message.text;
+                console.log(`💬 FB User ${sender_psid} hỏi: ${userQuestion}`);
+
+                // 1. Tải dữ liệu kiến thức (Context)
+                const context = await fetchDocumentContext();
+
+                // 2. Chuẩn bị cấu hình an toàn
+                const safetySettings = [
+                    { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+                    { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+                    { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+                    { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+                ];
+
+                // 3. Chuẩn bị Prompt
+                const promptGoc = `Bạn là một công cụ trích xuất thông tin chính xác tuyệt đối. Nhiệm vụ của bạn là trích xuất câu trả lời cho câu hỏi của người dùng CHỈ từ trong VĂN BẢN NGUỒN được cung cấp.
+
+                **QUY TẮC BẮT BUỘC PHẢI TUÂN THEO TUYỆT ĐỐI:**
+                1.  **NGUỒN DỮ LIỆU DUY NHẤT:** Chỉ được phép sử dụng thông tin có trong phần "VĂN BẢN NGUỒN". TUYỆT ĐỐI KHÔNG sử dụng kiến thức bên ngoài.
+                2.  **CHIA NHỎ:** Không viết thành đoạn văn. Hãy tách từng ý quan trọng thành các gạch đầu dòng riêng biệt.          
+                3.  **Nếu không có thông tin, trả lời chính xác:** "NO_INFO_FOUND".
+                4.  **XƯNG HÔ:** Bạn tự xưng là "đệ" và gọi người hỏi là "Sư huynh".
+                5.  **CHUYỂN ĐỔI NGÔI KỂ:** Chuyển "con/trò" thành "Sư huynh".
+                6.  **PHONG CÁCH:** Trả lời NGẮN GỌN, SÚC TÍCH, đi thẳng vào vấn đề chính.
+                
+                --- VĂN BẢN NGUỒN ---
+                ${context}
+                --- HẾT ---
+                
+                Câu hỏi: ${userQuestion}
+                Câu trả lời:`;
+
+                try {
+                    // 4. Gọi Gemini
+                    let response = await callGeminiWithRetry({
+                        contents: [{ parts: [{ text: promptGoc }] }],
+                        safetySettings: safetySettings,
+                        generationConfig: { temperature: 0.1, maxOutputTokens: 4096 }
+                    }, 0);
+
+                    let aiResponse = "";
+                    if (response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+                        aiResponse = response.data.candidates[0].content.parts[0].text.trim();
+                    }
+
+                    let finalAnswer = "";
+                    if (aiResponse.includes("NO_INFO_FOUND") || aiResponse.length < 5) {
+                        finalAnswer = "Dạ, đệ chưa tìm thấy thông tin này trong tài liệu. Sư huynh vui lòng nhắn cho Ban Quản Trị để được hỗ trợ chi tiết hơn nhé ạ!";
+                        // Tùy chọn: Chuyển câu hỏi sang Telegram cảnh báo admin tại đây
+                    } else {
+                        finalAnswer = aiResponse;
+                    }
+
+                    // 5. Gửi câu trả lời về lại Facebook
+                    await sendFacebookMessage(sender_psid, finalAnswer);
+
+                } catch (error) {
+                    console.error("Lỗi khi xử lý FB Message:", error.message);
+                    await sendFacebookMessage(sender_psid, "Hệ thống đang bảo trì, Sư huynh quay lại sau nhé!");
+                }
+            }
+        }
+    }
 });
 
 // Thay app.listen thành server.listen để chạy Socket.io

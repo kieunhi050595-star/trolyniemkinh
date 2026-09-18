@@ -303,7 +303,13 @@ app.post('/api/chat', async (req, res) => {
                           "Sư huynh vui lòng giữ màn hình này, câu trả lời sẽ hiện ra ngay khi có phản hồi ạ! ⏳";
 
         } else {
-            finalAnswer = "**Phụng Sự Viên Ảo Trả Lời :**\n\n" + aiResponse;
+            const isChinese = /[\u4e00-\u9fa5]/.test(aiResponse);
+
+            if (isChinese) {
+                finalAnswer = "**来自虚拟志愿者的回答：**\n\n" + aiResponse;
+            } else {
+                finalAnswer = "**Phụng Sự Viên Ảo Trả Lời :**\n\n" + aiResponse;
+            }
         }
 
         res.json({ answer: finalAnswer });

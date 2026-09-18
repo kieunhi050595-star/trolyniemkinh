@@ -220,6 +220,7 @@ app.post('/api/chat', async (req, res) => {
         5.  **CHUYỂN ĐỔI NGÔI KỂ:** Chuyển "con/trò" thành "Sư huynh".
         6.  **XỬ LÝ LINK:** Trả về URL thuần túy, KHÔNG dùng Markdown link.
         7.  **PHONG CÁCH:** Trả lời NGẮN GỌN, SÚC TÍCH, đi thẳng vào vấn đề chính.
+        8.  **ĐỒNG BỘ NGÔN NGỮ:** BẮT BUỘC trả lời bằng ĐÚNG NGÔN NGỮ của câu hỏi. Nếu câu hỏi là tiếng Trung, hãy giữ nguyên kết quả tiếng Trung, tự xưng là "弟" (Đệ) và gọi người hỏi là "师兄" (Sư huynh).
         
         --- VĂN BẢN NGUỒN ---
         ${context}
@@ -247,7 +248,7 @@ app.post('/api/chat', async (req, res) => {
         // --- BƯỚC 2: CỨU NGUY (RECITATION) ---
         if (finishReason === "RECITATION" || !aiResponse) {
             console.log("⚠️ Bị chặn bản quyền. Dùng Prompt diễn giải...");
-            const promptDienGiai = `NV: Trả lời câu hỏi "${question}" dựa trên văn bản nguồn.
+            const promptDienGiai = `NV: Trả lời câu hỏi "${question}" dựa trên văn bản nguồn (BẮT BUỘC DÙNG ĐÚNG NGÔN NGỮ CỦA CÂU HỎI).
             Nếu KHÔNG CÓ thông tin, trả lời "NO_INFO_FOUND".
             Nếu CÓ, hãy diễn đạt lại ý chính (không trích nguyên văn).
             --- VĂN BẢN NGUỒN ---

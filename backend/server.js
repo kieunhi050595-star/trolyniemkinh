@@ -137,14 +137,20 @@ async function callGeminiWithRetry(payload, keyIndex = 0, retryCount = 0) {
     try {
         const response = await axios.post(apiUrl, payload, {
             headers: { 'Content-Type': 'application/json' },
-            timeout: 60000 
+            timeout: 90000 
         });
         return response;
     } catch (error) {
         const status = error.response ? error.response.status : 0;
-        if (status === 429 || status === 400 || status === 403 || status >= 500) {
-            console.warn(`⚠️ Key ${keyIndex} lỗi (Mã: ${status}). Đổi Key...`);
+        const isTimeout = error.code === 'ECONNABORTED' || error.message.includes('timeout');
+    
+        // Bổ sung isTimeout vào điều kiện để hệ thống tự động đổi Key / thử lại thay vì báo lỗi luôn
+        if (isTimeout || status === 429 || status === 400 || status === 403 || status >= 500) {
+            const errorReason = isTimeout ? 'Timeout' : `Mã ${status}`;
+            console.warn(`⚠️ Key ${keyIndex} gặp vấn đề (${errorReason}). Đổi Key...`);
+            
             if (status === 429) await sleep(1000); 
+            
             return callGeminiWithRetry(payload, keyIndex + 1, retryCount);
         }
         throw error;
@@ -317,7 +323,7 @@ app.post('/api/chat', async (req, res) => {
     } catch (error) {
         console.error("Lỗi:", error.message);
         await sendTelegramAlert(`❌ LỖI HỆ THỐNG:\n${error.message}`);
-        res.status(503).json({ answer: "Hệ thống đang bận." });
+        res.status(503).json({ answer: "Dạ hiện tại mạng của đệ đang hơi chậm, Sư huynh có thể chat @psv : [nội dung] để nhắn trực tiếp cho Ban phụng sự nhé!" });
     }
 });
 

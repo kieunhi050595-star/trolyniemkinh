@@ -3,8 +3,9 @@
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
-const http = require('http'); // Thêm module http
-const { Server } = require("socket.io"); // Thêm Socket.io
+const http = require('http'); 
+const { Server } = require("socket.io"); 
+const cron = require('node-cron'); 
 require('dotenv').config();
 
 const app = express();
@@ -25,6 +26,9 @@ const FB_PAGE_ACCESS_TOKEN = process.env.FB_PAGE_ACCESS_TOKEN || "";
 
 io.on('connection', (socket) => {
     console.log('👤 User Connected:', socket.id);
+
+    const userIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
+    trackAndNotifyNewUser(userIp, "Website");
 
     socket.on('disconnect', () => {
         console.log('User Disconnected:', socket.id);
@@ -88,6 +92,27 @@ async function sendTelegramAlert(message) {
         });
     } catch (error) {
         console.error("Lỗi gửi Telegram:", error.message);
+    }
+}
+
+// --- TÍNH NĂNG THỐNG KÊ TRUY CẬP HẰNG NGÀY ---
+const dailyUsers = new Set(); // Dùng Set để lọc trùng lặp ID/IP
+
+async function trackAndNotifyNewUser(userId, platform) {
+    if (!userId) return;
+    
+    // Nếu ID này chưa từng truy cập trong ngày hôm nay
+    if (!dailyUsers.has(userId)) {
+        dailyUsers.add(userId); // Lưu vào bộ nhớ
+        const totalToday = dailyUsers.size;
+        
+        // Gửi thông báo ngay lập tức về nhóm Telegram
+        const msg = `🔔 <b>CÓ KHÁCH MỚI TRUY CẬP!</b>\n` +
+                    `🌐 Nền tảng: ${platform}\n` +
+                    `👤 ID/IP: <code>${userId}</code>\n` +
+                    `📈 <b>Tổng số khách hôm nay: ${totalToday} người</b>`;
+                    
+        await sendTelegramAlert(msg);
     }
 }
 
@@ -331,7 +356,9 @@ app.post('/api/telegram-webhook', async (req, res) => {
     try {
         const { message } = req.body;
         console.log("📩 Webhook received update:", message ? message.message_id : "No message");
-
+        if (message && message.from && message.from.id) {
+             trackAndNotifyNewUser(message.from.id, "Telegram");
+        }
         // Chỉ xử lý nếu là tin nhắn Reply
         if (message && message.reply_to_message) {
             const replyMsg = message.reply_to_message;
@@ -434,6 +461,8 @@ app.post('/api/facebook-webhook', async (req, res) => {
                 let userQuestion = webhook_event.message.text;
                 console.log(`💬 FB User ${sender_psid} hỏi: ${userQuestion}`);
 
+                trackAndNotifyNewUser(sender_psid, "Facebook Messenger");
+                
                 // 1. Tải dữ liệu kiến thức (Context)
                 const context = await fetchDocumentContext();
 
@@ -494,6 +523,23 @@ app.post('/api/facebook-webhook', async (req, res) => {
             }
         }
     }
+});
+
+// --- TỰ ĐỘNG CHỐT SỐ LIỆU VÀ RESET LÚC 23:59 MỖI NGÀY ---
+cron.schedule('59 23 * * *', async () => {
+    const total = dailyUsers.size;
+    
+    if (total > 0) {
+        await sendTelegramAlert(`📊 <b>BÁO CÁO TỔNG KẾT CUỐI NGÀY</b>\n` +
+                                `Tổng số lượt khách truy cập hôm nay: <b>${total}</b> người.\n` +
+                                `<i>🔄 Hệ thống đã tự động làm mới bộ đếm cho ngày mai!</i>`);
+    }
+    
+    // Xóa sạch danh sách để đếm lại từ đầu vào ngày mai
+    dailyUsers.clear();
+}, {
+    scheduled: true,
+    timezone: "Asia/Ho_Chi_Minh" // Chuẩn giờ Việt Nam
 });
 
 // Thay app.listen thành server.listen để chạy Socket.io

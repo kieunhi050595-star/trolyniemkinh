@@ -358,7 +358,9 @@ app.post('/api/telegram-webhook', async (req, res) => {
     try {
         const { message } = req.body;
         console.log("📩 Webhook received update:", message ? message.message_id : "No message");
-        if (message && message.from && message.from.id) {
+        const isAdminChat = message && message.chat && message.chat.id.toString() === process.env.TELEGRAM_CHAT_ID;
+        
+        if (!isAdminChat && message && message.from && message.from.id) {
              trackAndNotifyNewUser(message.from.id, "Telegram");
         }
         // Chỉ xử lý nếu là tin nhắn Reply

@@ -27,7 +27,9 @@ const FB_PAGE_ACCESS_TOKEN = process.env.FB_PAGE_ACCESS_TOKEN || "";
 io.on('connection', (socket) => {
     console.log('👤 User Connected:', socket.id);
 
-    const userIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
+    let rawIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
+    const userIp = rawIp.split(',')[0].trim(); // Cắt bỏ các IP trung gian, chỉ lấy IP đầu tiên
+    
     trackAndNotifyNewUser(userIp, "Website");
 
     socket.on('disconnect', () => {

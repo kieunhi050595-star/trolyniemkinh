@@ -89,7 +89,7 @@ async function sendTelegramAlert(message) {
         const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
         await axios.post(url, {
             chat_id: TELEGRAM_CHAT_ID,
-            text: `🤖 <b>PSV Ảo "Vô Úy"</b> 🚨\n\n${message}`,
+            text: `🤖 <b>Phụng Sự Viên Ảo</b> 🚨\n\n${message}`,
             parse_mode: 'HTML'
         });
     } catch (error) {

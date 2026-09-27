@@ -116,8 +116,6 @@
         // 1. KHAI BÁO CẤU HÌNH TRƯỚC (PHẢI ĐẶT TRÊN CÙNG)
         // ========================================================
         const BACKEND_API_URL = "https://trolyniemkinh.onrender.com";
-        const DEFAULT_DOCUMENT_URL = "https://gist.githubusercontent.com/kieunhi050595-star/ddecde18f83b77d06a117a9fcf349188/raw/dulieu.txt";
-        let documentContext = "";
         
         // DOM Elements
         const chatMessages = document.getElementById('chat-messages');
@@ -193,29 +191,25 @@
 
         window.addEventListener('load', async () => {
             try {
-                // 1. Tạo mã thời gian để bắt buộc tải mới (Chống cache)
-                const timeStamp = new Date().getTime();
-                const freshUrl = `${DEFAULT_DOCUMENT_URL}?v=${timeStamp}`;
-                
-                // 2. Tải dữ liệu từ URL mới này
-                const response = await fetch(freshUrl); 
-                if (!response.ok) throw new Error(`Status: ${response.status}`);
-                
-                documentContext = await response.text();
-                
-                // 3. Lấy dòng đầu tiên làm thông tin phiên bản
-                // (Nếu file trống thì hiện chữ "Mới nhất")
-                const firstLine = documentContext.split('\n')[0] || "Mới nhất";
+                // Chỉ gọi API rất nhẹ để lấy phiên bản (Dòng đầu tiên)
+                const versionRes = await fetch(`${BACKEND_API_URL.replace(/\/$/, "")}/api/get-version`);
+                let firstLine = "Mới nhất";
+                if (versionRes.ok) {
+                    const data = await versionRes.json();
+                    firstLine = data.version;
+                }
 
-                // 4. Hiển thị lời chào kèm phiên bản
+                // Hiển thị lời chào
                 addMessage(`Đệ chào Sư huynh ạ! Sư huynh vui lòng đối chiếu các câu trả lời của đệ nhé. Bởi vì đệ là AI đang thử nghiệm cho nên sẽ có những sai sót. "${firstLine}"`, 'bot');
                 
                 userInput.disabled = false;
                 userInput.placeholder = "Nhập câu hỏi của Sư huynh...";
             } catch (error) {
-                console.error("Lỗi tải dữ liệu:", error);
-                addMessage(`Lỗi tải dữ liệu: ${error.message}`, 'bot', 'error');
-                userInput.placeholder = "Lỗi kết nối dữ liệu!";
+                console.error("Lỗi:", error);
+                // Vẫn cho phép nhập liệu dù không lấy được version
+                addMessage(`Đệ chào Sư huynh ạ! Hệ thống đã sẵn sàng hỗ trợ.`, 'bot');
+                userInput.disabled = false;
+                userInput.placeholder = "Nhập câu hỏi của Sư huynh...";
             }
         });
 
@@ -261,7 +255,7 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
-        async function callBackendAPI(question, context) {
+        async function callBackendAPI(question) {
             const url = `${BACKEND_API_URL.replace(/\/$/, "")}/api/chat`;
 
             const response = await fetch(url, {
@@ -269,8 +263,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     question: question,
-                    context: context,
-                    socketId: mySocketId // Gửi kèm Socket ID
+                    socketId: mySocketId 
                 })
             });
 
@@ -299,7 +292,7 @@
             sendButton.innerHTML = '<div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>';
 
             try {
-                const answer = await callBackendAPI(userQuestion, documentContext);
+                const answer = await callBackendAPI(userQuestion); 
                 addMessage(answer, 'bot');
             } catch (error) {
                 console.error("Lỗi:", error);
@@ -319,7 +312,7 @@
             }
         });
         userInput.addEventListener('input', () => { 
-            sendButton.disabled = userInput.value.trim().length === 0 || !documentContext; 
+            sendButton.disabled = userInput.value.trim().length === 0; 
         });
     </script>
 </body>

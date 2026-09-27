@@ -382,9 +382,9 @@ app.post('/api/chat', async (req, res) => {
             }
         }
 
-        // --- BƯỚC 2: CỨU NGUY (RECITATION) ---
-        if (finishReason === "RECITATION" || !aiResponse) {
-            console.log("⚠️ Bị chặn bản quyền. Dùng Prompt diễn giải...");
+        // --- BƯỚC 2: CỨU NGUY (KHI AI DỪNG ĐỘT NGỘT) ---
+        if (finishReason !== "STOP" || !aiResponse) {
+            console.log(`⚠️ AI bị ngắt ngang (Mã lỗi: ${finishReason}). Kích hoạt Prompt diễn giải...`);
             
             response = await callGeminiWithRetry({
                 contents: [{ parts: [{ text: promptDienGiai }] }],

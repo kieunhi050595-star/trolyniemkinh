@@ -286,7 +286,8 @@
                 let errorText = `Lỗi HTTP: ${response.status}`;
                 try {
                     const errorData = await response.json();
-                    errorText = `Đệ xin lỗi: ${errorData.error || response.statusText}`;
+                    // Thêm errorData.answer phòng trường hợp server trả nhầm
+                    errorText = `Đệ xin lỗi: ${errorData.error || errorData.answer || response.statusText}`;
                 } catch (e) {
                     errorText = `Lỗi kết nối Server.`;
                 }

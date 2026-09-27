@@ -576,29 +576,43 @@ app.post('/api/facebook-webhook', async (req, res) => {
                     { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
                 ];
 
-                // 3. Chuẩn bị Prompt
-                const promptGoc = `Bạn là một công cụ trích xuất thông tin chính xác tuyệt đối. Nhiệm vụ của bạn là trích xuất câu trả lời cho câu hỏi của người dùng CHỈ từ trong VĂN BẢN NGUỒN được cung cấp.
+                // NHẬN DIỆN NGÔN NGỮ TỪ FACEBOOK
+                const isChinese = /[\u4e00-\u9fa5]/.test(userQuestion);
+                let promptGoc = "";
 
-                **QUY TẮC BẮT BUỘC PHẢI TUÂN THEO TUYỆT ĐỐI:**
-                1.  **NGUỒN DỮ LIỆU DUY NHẤT:** Chỉ được phép sử dụng thông tin có trong phần "VĂN BẢN NGUỒN". TUYỆT ĐỐI KHÔNG sử dụng kiến thức bên ngoài.
-                2.  **CHIA NHỎ:** Không viết thành đoạn văn. Hãy tách từng ý quan trọng thành các gạch đầu dòng riêng biệt.         
-                3.  **Nếu không có thông tin, trả lời chính xác:** "NO_INFO_FOUND".
-                4.  **XƯNG HÔ:** Bạn tự xưng là "đệ" và gọi người hỏi là "Sư huynh".
-                5.  **CHUYỂN ĐỔI NGÔI KỂ:** Chuyển "con/trò" thành "Sư huynh".
-                6.  **XỬ LÝ LINK:** Trả về URL thuần túy, KHÔNG dùng Markdown link.
-                7.  **PHONG CÁCH:** Trả lời NGẮN GỌN, SÚC TÍCH, đi thẳng vào vấn đề chính.
-                8. QUY TẮC NGÔN NGỮ (GHI ĐÈ QUY TẮC 4 VÀ 5): Bắt buộc trả lời 100% bằng đúng ngôn ngữ của câu hỏi. NẾU CÂU HỎI LÀ TIẾNG TRUNG: Hãy vô hiệu hóa quy tắc 4 và 5. TUYỆT ĐỐI KHÔNG trộn lẫn bất kỳ từ Tiếng Việt nào vào câu trả lời. Toàn bộ văn bản phải là Tiếng Trung, bạn tự xưng là "弟" và gọi người hỏi là "师兄".
-                9. QUY TẮC ĐIỀN NNN: Khi hướng dẫn viết thông tin lên "Ngôi Nhà Nhỏ" (NNN), BẮT BUỘC chỉ cung cấp cú pháp tiếng Anh (VD: Karmic creditor of...). TUYỆT ĐỐI KHÔNG xúi giục hay đưa ra lựa chọn viết các từ tiếng Việt như "Thổ Địa", "Oan gia trái chủ", "Vong nhi" lên giấy.
-                
-                --- VĂN BẢN NGUỒN ---
-                ${context}
-                --- HẾT ---
-                
-                Câu hỏi: ${userQuestion}
-                Câu trả lời:`;
+                if (isChinese) {
+                    promptGoc = `你是一个绝对准确的信息提取工具。你的任务是仅从提供的“源文本”中提取用户问题的答案。
+                    **必须严格遵守的规则：**
+                    1. **唯一数据源：** 仅允许使用“源文本”中的信息。
+                    2. **分点说明：** 请将每个要点分成单独的要点符号。
+                    3. **如果找不到信息，请准确回答：** "NO_INFO_FOUND"。
+                    4. **称呼：** 你自称 "弟" (đệ)，称呼提问者为 "师兄" (Sư huynh)。
+                    5. **语言强制：** 必须使用 100% 中文回答。
+                    
+                    --- 源文本 ---
+                    ${context}
+                    --- 结束 ---
+                    
+                    问题: ${userQuestion}
+                    答案:`;
+                } else {
+                    promptGoc = `Bạn là một công cụ trích xuất thông tin chính xác tuyệt đối. Nhiệm vụ của bạn là trích xuất câu trả lời cho câu hỏi của người dùng CHỈ từ trong VĂN BẢN NGUỒN được cung cấp.
+                    **QUY TẮC BẮT BUỘC PHẢI TUÂN THEO TUYỆT ĐỐI:**
+                    1. **NGUỒN DỮ LIỆU DUY NHẤT:** Chỉ được phép sử dụng thông tin có trong phần "VĂN BẢN NGUỒN".
+                    2. **CHIA NHỎ:** Hãy tách từng ý quan trọng thành các gạch đầu dòng riêng biệt.         
+                    3. **Nếu không có thông tin, trả lời chính xác:** "NO_INFO_FOUND".
+                    4. **XƯNG HÔ:** Bạn tự xưng là "đệ" và gọi người hỏi là "Sư huynh".
+                    5. **NGÔN NGỮ:** Bắt buộc trả lời 100% bằng Tiếng Việt.
+                    
+                    --- VĂN BẢN NGUỒN ---
+                    ${context}
+                    --- HẾT ---
+                    
+                    Câu hỏi: ${userQuestion}
+                    Câu trả lời:`;
+                }
 
                 try {
-                    // 4. Gọi Gemini
                     let response = await callGeminiWithRetry({
                         contents: [{ parts: [{ text: promptGoc }] }],
                         safetySettings: safetySettings,
@@ -612,13 +626,15 @@ app.post('/api/facebook-webhook', async (req, res) => {
 
                     let finalAnswer = "";
                     if (aiResponse.includes("NO_INFO_FOUND") || aiResponse.length < 5) {
-                        finalAnswer = "Dạ, đệ chưa tìm thấy thông tin này trong tài liệu. Sư huynh vui lòng nhắn cho Ban Quản Trị để được hỗ trợ chi tiết hơn nhé ạ!";
-                        // Tùy chọn: Chuyển câu hỏi sang Telegram cảnh báo admin tại đây
+                        if (isChinese) {
+                            finalAnswer = "对不起，目前文档中没有找到此信息。请给管理员发消息以获取更多支持！";
+                        } else {
+                            finalAnswer = "Dạ, đệ chưa tìm thấy thông tin này trong tài liệu. Sư huynh vui lòng nhắn cho Ban Quản Trị để được hỗ trợ chi tiết hơn nhé ạ!";
+                        }
                     } else {
                         finalAnswer = aiResponse;
                     }
 
-                    // 5. Gửi câu trả lời về lại Facebook
                     await sendFacebookMessage(sender_psid, finalAnswer);
 
                 } catch (error) {

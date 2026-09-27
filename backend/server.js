@@ -430,28 +430,32 @@ app.post('/api/chat', async (req, res) => {
         if (aiResponse.includes("NO_INFO_FOUND") || aiResponse.length < 5) {
             console.log("⚠️ Không tìm thấy -> Chuyển Telegram...");
         
-            const msgContent = `❓ <b>CÂU HỎI CẦN HỖ TRỢ</b>\n\n"${question}"\n\n👉 <i>Reply tin nhắn này để trả lời.</i>\n\n<pre>ID:${socketId}</pre>`;
+            // 1. Mã hóa ký tự đặc biệt để không làm sập Telegram
+            const safeQuestion = escapeHtml(question);
+            const msgContent = `❓ <b>CÂU HỎI CẦN HỖ TRỢ</b>\n\n"${safeQuestion}"\n\n👉 <i>Reply tin nhắn này để trả lời.</i>\n\n<pre>ID:${socketId}</pre>`;
         
-            const teleRes = await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-                chat_id: TELEGRAM_CHAT_ID,
-                text: msgContent,
-                parse_mode: 'HTML'
-            });
-
-            if (teleRes.data && teleRes.data.result && socketId) {
-                const msgId = teleRes.data.result.message_id;
-                pendingRequests.set(msgId, { 
-                    socketId: socketId, 
-                    timestamp: Date.now() 
+            // 2. Bọc try-catch để lỡ Telegram sập, Web vẫn trả lời khách bình thường
+            try {
+                const teleRes = await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+                    chat_id: TELEGRAM_CHAT_ID,
+                    text: msgContent,
+                    parse_mode: 'HTML'
                 });
-                
-                if (!socketToMsgId.has(socketId)) {
-                    socketToMsgId.set(socketId, []);
+
+                if (teleRes.data && teleRes.data.result && socketId) {
+                    const msgId = teleRes.data.result.message_id;
+                    pendingRequests.set(msgId, { socketId: socketId, timestamp: Date.now() });
+                    
+                    if (!socketToMsgId.has(socketId)) {
+                        socketToMsgId.set(socketId, []);
+                    }
+                    socketToMsgId.get(socketId).push(msgId);
                 }
-                socketToMsgId.get(socketId).push(msgId);
+            } catch (teleErr) {
+                console.error("⚠️ Lỗi gửi thông báo Telegram:", teleErr.message);
             }
 
-            // Trả lời mặc định cũng phải phân tách ngôn ngữ
+            // 3. Trả lời mặc định
             if (isChinese) {
                 finalAnswer = "对不起，目前文本数据中没有这个问题。\n\n" +
                               "🚀 **我已经将问题转交给支持团队。**\n" +
@@ -476,7 +480,8 @@ app.post('/api/chat', async (req, res) => {
     } catch (error) {
         console.error("Lỗi:", error.message);
         await sendTelegramAlert(`❌ LỖI HỆ THỐNG:\n${error.message}`);
-        res.status(503).json({ answer: "Dạ hiện tại mạng của đệ đang hơi chậm, Sư huynh có thể chat @psv : [nội dung] để nhắn trực tiếp cho Ban phụng sự nhé!" });
+        // Đổi 'answer' thành 'error' để Frontend hiểu được
+        res.status(503).json({ error: "Dạ hiện tại mạng của đệ đang hơi chậm, Sư huynh có thể chat @psv : [nội dung] để nhắn trực tiếp cho Ban phụng sự nhé!" });
     }
 });
 

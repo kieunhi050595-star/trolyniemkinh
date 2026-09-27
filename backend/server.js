@@ -49,19 +49,46 @@ io.on('connection', (socket) => {
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-// --- HÀM TẢI KIẾN THỨC CHO FACEBOOK MESSENGER ---
+// --- CƠ CHẾ CACHE DỮ LIỆU TẠI SERVER ---
 const DEFAULT_DOCUMENT_URL = "https://gist.githubusercontent.com/kieunhi050595-star/ddecde18f83b77d06a117a9fcf349188/raw/dulieu.txt";
 
-async function fetchDocumentContext() {
+let globalContextCache = ""; // Biến lưu trữ dữ liệu trên RAM
+let lastFetchTime = 0;
+const CACHE_TTL = 10 * 60 * 1000; // 10 phút (Tính bằng mili-giây)
+
+async function getDocumentContext() {
+    const now = Date.now();
+    
+    // Nếu đã có cache và chưa hết hạn (10 phút), dùng luôn không cần tải lại
+    if (globalContextCache && (now - lastFetchTime < CACHE_TTL)) {
+        return globalContextCache;
+    }
+
     try {
+        console.log("🔄 Đang cập nhật dữ liệu mới từ GitHub...");
         const timeStamp = new Date().getTime();
         const response = await axios.get(`${DEFAULT_DOCUMENT_URL}?v=${timeStamp}`);
-        return response.data;
+        
+        globalContextCache = response.data;
+        lastFetchTime = now;
+        console.log("✅ Cập nhật dữ liệu thành công!");
+        
+        return globalContextCache;
     } catch (error) {
-        console.error("Lỗi tải file dữ liệu .txt:", error.message);
-        return ""; // Trả về chuỗi rỗng nếu lỗi
+        console.error("❌ Lỗi tải file dữ liệu .txt:", error.message);
+        return globalContextCache; // Nếu lỗi, trả về bản cache cũ
     }
 }
+
+// Gọi hàm này ngay khi khởi động server để nạp sẵn dữ liệu
+getDocumentContext();
+
+// Cung cấp API nhẹ cho Frontend lấy dòng đầu tiên (để hiển thị lời chào)
+app.get('/api/get-version', async (req, res) => {
+    const context = await getDocumentContext();
+    const firstLine = context.split('\n')[0] || "Mới nhất";
+    res.json({ version: firstLine });
+});
 
 // --- 1. XỬ LÝ DANH SÁCH KEY ---
 const rawKeys = process.env.GEMINI_API_KEYS || "";
@@ -189,9 +216,11 @@ app.post('/api/chat', async (req, res) => {
     if (apiKeys.length === 0) return res.status(500).json({ error: 'Chưa cấu hình API Key.' });
 
     try {
-        // NHẬN THÊM socketId TỪ CLIENT
-        const { question, context, socketId } = req.body;
-        if (!question || !context) return res.status(400).json({ error: 'Thiếu dữ liệu.' });
+        // KHÔNG LẤY context TỪ req.body NỮA
+        const { question, socketId } = req.body;
+        if (!question) return res.status(400).json({ error: 'Thiếu câu hỏi.' });
+
+        const context = await getDocumentContext();
 
         // --- TÍNH NĂNG MỚI: NHẮN TIN TRỰC TIẾP (@psv : nội dung) ---
         if (question.trim().toLowerCase().startsWith("@psv")) {
@@ -469,7 +498,7 @@ app.post('/api/facebook-webhook', async (req, res) => {
                 trackAndNotifyNewUser(sender_psid, "Facebook Messenger");
                 
                 // 1. Tải dữ liệu kiến thức (Context)
-                const context = await fetchDocumentContext();
+                const context = await getDocumentContext();
 
                 // 2. Chuẩn bị cấu hình an toàn
                 const safetySettings = [
@@ -484,11 +513,14 @@ app.post('/api/facebook-webhook', async (req, res) => {
 
                 **QUY TẮC BẮT BUỘC PHẢI TUÂN THEO TUYỆT ĐỐI:**
                 1.  **NGUỒN DỮ LIỆU DUY NHẤT:** Chỉ được phép sử dụng thông tin có trong phần "VĂN BẢN NGUỒN". TUYỆT ĐỐI KHÔNG sử dụng kiến thức bên ngoài.
-                2.  **CHIA NHỎ:** Không viết thành đoạn văn. Hãy tách từng ý quan trọng thành các gạch đầu dòng riêng biệt.          
+                2.  **CHIA NHỎ:** Không viết thành đoạn văn. Hãy tách từng ý quan trọng thành các gạch đầu dòng riêng biệt.         
                 3.  **Nếu không có thông tin, trả lời chính xác:** "NO_INFO_FOUND".
                 4.  **XƯNG HÔ:** Bạn tự xưng là "đệ" và gọi người hỏi là "Sư huynh".
                 5.  **CHUYỂN ĐỔI NGÔI KỂ:** Chuyển "con/trò" thành "Sư huynh".
-                6.  **PHONG CÁCH:** Trả lời NGẮN GỌN, SÚC TÍCH, đi thẳng vào vấn đề chính.
+                6.  **XỬ LÝ LINK:** Trả về URL thuần túy, KHÔNG dùng Markdown link.
+                7.  **PHONG CÁCH:** Trả lời NGẮN GỌN, SÚC TÍCH, đi thẳng vào vấn đề chính.
+                8. QUY TẮC NGÔN NGỮ (GHI ĐÈ QUY TẮC 4 VÀ 5): Bắt buộc trả lời 100% bằng đúng ngôn ngữ của câu hỏi. NẾU CÂU HỎI LÀ TIẾNG TRUNG: Hãy vô hiệu hóa quy tắc 4 và 5. TUYỆT ĐỐI KHÔNG trộn lẫn bất kỳ từ Tiếng Việt nào vào câu trả lời. Toàn bộ văn bản phải là Tiếng Trung, bạn tự xưng là "弟" và gọi người hỏi là "师兄".
+                9. QUY TẮC ĐIỀN NNN: Khi hướng dẫn viết thông tin lên "Ngôi Nhà Nhỏ" (NNN), BẮT BUỘC chỉ cung cấp cú pháp tiếng Anh (VD: Karmic creditor of...). TUYỆT ĐỐI KHÔNG xúi giục hay đưa ra lựa chọn viết các từ tiếng Việt như "Thổ Địa", "Oan gia trái chủ", "Vong nhi" lên giấy.
                 
                 --- VĂN BẢN NGUỒN ---
                 ${context}

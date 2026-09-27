@@ -366,10 +366,11 @@ app.post('/api/chat', async (req, res) => {
             ${context}`;
         }
 
+        // Ở bước 1, bạn nhớ đổi maxOutputTokens thành 8192 nhé
         let response = await callGeminiWithRetry({
             contents: [{ parts: [{ text: promptGoc }] }],
             safetySettings: safetySettings,
-            generationConfig: { temperature: 0.1, maxOutputTokens: 4096 }
+            generationConfig: { temperature: 0.1, maxOutputTokens: 8192 } // Tăng giới hạn chữ
         }, 0);
 
         let aiResponse = "";
@@ -382,14 +383,38 @@ app.post('/api/chat', async (req, res) => {
             }
         }
 
-        // --- BƯỚC 2: CỨU NGUY (KHI AI DỪNG ĐỘT NGỘT) ---
-        if (finishReason !== "STOP" || !aiResponse) {
-            console.log(`⚠️ AI bị ngắt ngang (Mã lỗi: ${finishReason}). Kích hoạt Prompt diễn giải...`);
+        // --- XỬ LÝ LỖI TRẢ LỜI QUÁ DÀI (MAX_TOKENS) ---
+        // Tuyệt đối không dùng Prompt diễn giải ở đây để tránh AI tự bịa thông tin
+        if (finishReason === "MAX_TOKENS") {
+            console.log("⚠️ Cảnh báo: Trả lời quá dài bị cắt ngang (MAX_TOKENS).");
+            if (isChinese) {
+                 aiResponse += "\n\n*(抱歉，因为内容太长，我先暂停在这里。师兄可以针对每个具体部分详细提问！)*";
+            } else {
+                 aiResponse += "\n\n*(Dạ, do nội dung quá dài nên đệ xin phép tạm dừng ở đây. Sư huynh vui lòng đặt câu hỏi chi tiết hơn vào từng phần cụ thể nhé ạ!)*";
+            }
+        } 
+        // --- BƯỚC 2: CHỈ CỨU NGUY KHI BỊ CHẶN BẢN QUYỀN (RECITATION) HOẶC AN TOÀN (SAFETY) ---
+        else if ((finishReason === "RECITATION" || finishReason === "SAFETY" || !aiResponse) && finishReason !== "STOP") {
+            console.log(`⚠️ Bị chặn (Lỗi: ${finishReason}). Dùng Prompt cứu nguy siêu ngặt...`);
             
+            // PROMPT CỨU NGUY MỚI: CẤM TUYỆT ĐỐI SỰ SÁNG TẠO
+            if (isChinese) {
+                promptDienGiai = `任务: 根据源文本回答问题 "${question}"（必须使用 100% 中文）。
+                绝对规则：只能使用源文本中的信息。绝对不可使用外部知识，绝不能捏造信息。简明扼要地总结以避免版权错误。
+                --- 源文本 ---
+                ${context}`;
+            } else {
+                promptDienGiai = `NV: Trả lời câu hỏi "${question}" dựa trên văn bản nguồn (BẮT BUỘC DÙNG 100% TIẾNG VIỆT).
+                QUY TẮC TUYỆT ĐỐI: CHỈ được dùng thông tin trong văn bản nguồn. TUYỆT ĐỐI KHÔNG sử dụng kiến thức bên ngoài, KHÔNG tự bịa thêm thông tin. Viết tóm tắt ngắn gọn lại để tránh lỗi bản quyền.
+                --- VĂN BẢN NGUỒN ---
+                ${context}`;
+            }
+
             response = await callGeminiWithRetry({
                 contents: [{ parts: [{ text: promptDienGiai }] }],
                 safetySettings: safetySettings,
-                generationConfig: { temperature: 0.3, maxOutputTokens: 4096 }
+                // ÉP TEMPERATURE VỀ 0.1 GIỐNG HỆT BƯỚC 1 ĐỂ KHÔNG BỊA CHUYỆN
+                generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
             }, 0);
 
             if (response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
@@ -620,12 +645,53 @@ app.post('/api/facebook-webhook', async (req, res) => {
                     let response = await callGeminiWithRetry({
                         contents: [{ parts: [{ text: promptGoc }] }],
                         safetySettings: safetySettings,
-                        generationConfig: { temperature: 0.1, maxOutputTokens: 4096 }
+                        generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
                     }, 0);
 
                     let aiResponse = "";
-                    if (response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-                        aiResponse = response.data.candidates[0].content.parts[0].text.trim();
+                    let finishReason = "";
+
+                    if (response.data?.candidates?.[0]) {
+                        finishReason = response.data.candidates[0].finishReason;
+                        if (response.data.candidates[0].content?.parts?.[0]?.text) {
+                            aiResponse = response.data.candidates[0].content.parts[0].text.trim();
+                        }
+                    }
+
+                    // --- XỬ LÝ LỖI TRẢ LỜI QUÁ DÀI (MAX_TOKENS) TRÊN FACEBOOK ---
+                    if (finishReason === "MAX_TOKENS") {
+                        if (isChinese) {
+                             aiResponse += "\n\n*(抱歉，因为内容太长，我先暂停在这里。师兄可以针对每个具体部分详细提问！)*";
+                        } else {
+                             aiResponse += "\n\n*(Dạ, do nội dung quá dài nên đệ xin phép tạm dừng ở đây. Sư huynh vui lòng đặt câu hỏi chi tiết hơn vào từng phần cụ thể nhé ạ!)*";
+                        }
+                    } 
+                    // --- BƯỚC 2: CỨU NGUY BẢN QUYỀN ---
+                    else if ((finishReason === "RECITATION" || finishReason === "SAFETY" || !aiResponse) && finishReason !== "STOP") {
+                        let promptDienGiai = "";
+                        if (isChinese) {
+                            promptDienGiai = `任务: 根据源文本回答问题 "${userQuestion}"（必须使用 100% 中文）。
+                            绝对规则：只能使用源文本中的信息。绝对不可使用外部知识，绝不能捏造信息。简明扼要地总结以避免版权错误。
+                            --- 源文本 ---
+                            ${context}`;
+                        } else {
+                            promptDienGiai = `NV: Trả lời câu hỏi "${userQuestion}" dựa trên văn bản nguồn (BẮT BUỘC DÙNG 100% TIẾNG VIỆT).
+                            QUY TẮC TUYỆT ĐỐI: CHỈ được dùng thông tin trong văn bản nguồn. TUYỆT ĐỐI KHÔNG tự bịa thêm thông tin. Viết tóm tắt ngắn gọn lại để tránh lỗi bản quyền.
+                            --- VĂN BẢN NGUỒN ---
+                            ${context}`;
+                        }
+
+                        response = await callGeminiWithRetry({
+                            contents: [{ parts: [{ text: promptDienGiai }] }],
+                            safetySettings: safetySettings,
+                            generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
+                        }, 0);
+
+                        if (response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+                            aiResponse = response.data.candidates[0].content.parts[0].text.trim();
+                        } else {
+                            aiResponse = "NO_INFO_FOUND";
+                        }
                     }
 
                     let finalAnswer = "";

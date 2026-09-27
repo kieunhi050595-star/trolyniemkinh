@@ -294,6 +294,7 @@ app.post('/api/chat', async (req, res) => {
             }
         }
         
+        // Tách riêng cấu hình an toàn
         const safetySettings = [
             { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
             { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
@@ -301,26 +302,65 @@ app.post('/api/chat', async (req, res) => {
             { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
         ];
 
-        // --- BƯỚC 1: PROMPT GỐC ---
-        const promptGoc = `Bạn là một công cụ trích xuất thông tin chính xác tuyệt đối. Nhiệm vụ của bạn là trích xuất câu trả lời cho câu hỏi của người dùng CHỈ từ trong VĂN BẢN NGUỒN được cung cấp.
+        // --- NHẬN DIỆN NGÔN NGỮ TỪ CÂU HỎI ---
+        const isChinese = /[\u4e00-\u9fa5]/.test(question);
+        
+        let promptGoc = "";
+        let promptDienGiai = "";
 
-        **QUY TẮC BẮT BUỘC PHẢI TUÂN THEO TUYỆT ĐỐI:**
-        1.  **NGUỒN DỮ LIỆU DUY NHẤT:** Chỉ được phép sử dụng thông tin có trong phần "VĂN BẢN NGUỒN". TUYỆT ĐỐI KHÔNG sử dụng kiến thức bên ngoài.
-        2.  **CHIA NHỎ:** Không viết thành đoạn văn. Hãy tách từng ý quan trọng thành các gạch đầu dòng riêng biệt.          
-        3.  **Nếu không có thông tin, trả lời chính xác:** "NO_INFO_FOUND".
-        4.  **XƯNG HÔ:** Bạn tự xưng là "đệ" và gọi người hỏi là "Sư huynh".
-        5.  **CHUYỂN ĐỔI NGÔI KỂ:** Chuyển "con/trò" thành "Sư huynh".
-        6.  **XỬ LÝ LINK:** Trả về URL thuần túy, KHÔNG dùng Markdown link.
-        7.  **PHONG CÁCH:** Trả lời NGẮN GỌN, SÚC TÍCH, đi thẳng vào vấn đề chính.
-        8. QUY TẮC NGÔN NGỮ (GHI ĐÈ QUY TẮC 4 VÀ 5): Bắt buộc trả lời 100% bằng đúng ngôn ngữ của câu hỏi. NẾU CÂU HỎI LÀ TIẾNG TRUNG: Hãy vô hiệu hóa quy tắc 4 và 5. TUYỆT ĐỐI KHÔNG trộn lẫn bất kỳ từ Tiếng Việt nào vào câu trả lời. Toàn bộ văn bản phải là Tiếng Trung, bạn tự xưng là "弟" và gọi người hỏi là "师兄".
-        9. QUY TẮC ĐIỀN NNN: Khi hướng dẫn viết thông tin lên "Ngôi Nhà Nhỏ" (NNN), BẮT BUỘC chỉ cung cấp cú pháp tiếng Anh (VD: Karmic creditor of...). TUYỆT ĐỐI KHÔNG xúi giục hay đưa ra lựa chọn viết các từ tiếng Việt như "Thổ Địa", "Oan gia trái chủ", "Vong nhi" lên giấy.
-        
-        --- VĂN BẢN NGUỒN ---
-        ${context}
-        --- HẾT ---
-        
-        Câu hỏi: ${question}
-        Câu trả lời:`;
+        // --- BƯỚC 1: TẠO PROMPT ĐỘNG DỰA TRÊN NGÔN NGỮ ---
+        if (isChinese) {
+            // PROMPT 100% TIẾNG TRUNG
+            promptGoc = `你是一个绝对准确的信息提取工具。你的任务是仅从提供的“源文本”中提取用户问题的答案。
+
+            **必须严格遵守的规则：**
+            1. **唯一数据源：** 仅允许使用“源文本”中的信息。绝对不可使用外部知识。
+            2. **分点说明：** 不要写成长篇大段。请将每个要点分成单独的要点符号。
+            3. **如果找不到信息，请准确回答：** "NO_INFO_FOUND"。
+            4. **称呼：** 你自称 "弟" (đệ)，称呼提问者为 "师兄" (Sư huynh)。
+            5. **格式：** 保持简明扼要，直奔主题，直接返回纯 URL 链接。
+            6. **语言强制：** 必须使用 100% 中文回答。绝对不要在答案中混入任何越南语。
+            7. **关于 NNN：** 指导填写 NNN 时，只能提供英文格式 (例如: Karmic creditor of...)。绝对不要建议使用越南文写 "Thổ Địa", "Oan gia trái chủ", "Vong nhi" 等词。
+
+            --- 源文本 ---
+            ${context}
+            --- 结束 ---
+            
+            问题: ${question}
+            答案:`;
+
+            promptDienGiai = `任务: 根据源文本回答问题 "${question}"（必须使用 100% 中文）。
+            如果没有相关信息，请回答 "NO_INFO_FOUND"。如果有，请重新表述主要观点（不要照抄原文）。
+            --- 源文本 ---
+            ${context}`;
+
+        } else {
+            // PROMPT 100% TIẾNG VIỆT
+            promptGoc = `Bạn là một công cụ trích xuất thông tin chính xác tuyệt đối. Nhiệm vụ của bạn là trích xuất câu trả lời cho câu hỏi của người dùng CHỈ từ trong VĂN BẢN NGUỒN được cung cấp.
+
+            **QUY TẮC BẮT BUỘC PHẢI TUÂN THEO TUYỆT ĐỐI:**
+            1. **NGUỒN DỮ LIỆU DUY NHẤT:** Chỉ được phép sử dụng thông tin có trong phần "VĂN BẢN NGUỒN". TUYỆT ĐỐI KHÔNG sử dụng kiến thức bên ngoài.
+            2. **CHIA NHỎ:** Không viết thành đoạn văn. Hãy tách từng ý quan trọng thành các gạch đầu dòng riêng biệt.         
+            3. **Nếu không có thông tin, trả lời chính xác:** "NO_INFO_FOUND".
+            4. **XƯNG HÔ:** Bạn tự xưng là "đệ" và gọi người hỏi là "Sư huynh".
+            5. **CHUYỂN ĐỔI NGÔI KỂ:** Chuyển "con/trò" thành "Sư huynh".
+            6. **XỬ LÝ LINK:** Trả về URL thuần túy, KHÔNG dùng Markdown link.
+            7. **PHONG CÁCH:** Trả lời NGẮN GỌN, SÚC TÍCH, đi thẳng vào vấn đề chính.
+            8. **NGÔN NGỮ:** Bắt buộc trả lời 100% bằng Tiếng Việt. Không pha trộn bất kỳ ngôn ngữ nào khác.
+            9. **QUY TẮC ĐIỀN NNN:** Khi hướng dẫn viết thông tin lên "Ngôi Nhà Nhỏ" (NNN), BẮT BUỘC chỉ cung cấp cú pháp tiếng Anh (VD: Karmic creditor of...). TUYỆT ĐỐI KHÔNG xúi giục hay đưa ra lựa chọn viết các từ tiếng Việt như "Thổ Địa", "Oan gia trái chủ", "Vong nhi" lên giấy.        
+            
+            --- VĂN BẢN NGUỒN ---
+            ${context}
+            --- HẾT ---
+            
+            Câu hỏi: ${question}
+            Câu trả lời:`;
+
+            promptDienGiai = `NV: Trả lời câu hỏi "${question}" dựa trên văn bản nguồn (BẮT BUỘC DÙNG 100% TIẾNG VIỆT).
+            Nếu KHÔNG CÓ thông tin, trả lời "NO_INFO_FOUND". Nếu CÓ, hãy diễn đạt lại ý chính (không trích nguyên văn).
+            --- VĂN BẢN NGUỒN ---
+            ${context}`;
+        }
 
         let response = await callGeminiWithRetry({
             contents: [{ parts: [{ text: promptGoc }] }],
@@ -341,12 +381,7 @@ app.post('/api/chat', async (req, res) => {
         // --- BƯỚC 2: CỨU NGUY (RECITATION) ---
         if (finishReason === "RECITATION" || !aiResponse) {
             console.log("⚠️ Bị chặn bản quyền. Dùng Prompt diễn giải...");
-            const promptDienGiai = `NV: Trả lời câu hỏi "${question}" dựa trên văn bản nguồn (BẮT BUỘC DÙNG ĐÚNG NGÔN NGỮ CỦA CÂU HỎI).
-            Nếu KHÔNG CÓ thông tin, trả lời "NO_INFO_FOUND".
-            Nếu CÓ, hãy diễn đạt lại ý chính (không trích nguyên văn).
-            --- VĂN BẢN NGUỒN ---
-            ${context}`;
-
+            
             response = await callGeminiWithRetry({
                 contents: [{ parts: [{ text: promptDienGiai }] }],
                 safetySettings: safetySettings,
@@ -366,8 +401,6 @@ app.post('/api/chat', async (req, res) => {
         if (aiResponse.includes("NO_INFO_FOUND") || aiResponse.length < 5) {
             console.log("⚠️ Không tìm thấy -> Chuyển Telegram...");
         
-            // 1. Gửi tin nhắn vào nhóm (THÊM SOCKET ID VÀO CUỐI TIN NHẮN)
-            // Dùng thẻ <pre> để giấu ID hoặc làm nó dễ parse, nhưng hiển thị rõ cho Admin biết
             const msgContent = `❓ <b>CÂU HỎI CẦN HỖ TRỢ</b>\n\n"${question}"\n\n👉 <i>Reply tin nhắn này để trả lời.</i>\n\n<pre>ID:${socketId}</pre>`;
         
             const teleRes = await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
@@ -376,31 +409,32 @@ app.post('/api/chat', async (req, res) => {
                 parse_mode: 'HTML'
             });
 
-            // 2. Lưu Socket ID vào bộ nhớ tạm
             if (teleRes.data && teleRes.data.result && socketId) {
                 const msgId = teleRes.data.result.message_id;
-                
-                // Lưu xuôi (để Webhook tìm User)
                 pendingRequests.set(msgId, { 
                     socketId: socketId, 
                     timestamp: Date.now() 
                 });
                 
-                // ---> THÊM ĐOẠN NÀY (Lưu ngược để dọn dẹp khi User thoát)
                 if (!socketToMsgId.has(socketId)) {
                     socketToMsgId.set(socketId, []);
                 }
                 socketToMsgId.get(socketId).push(msgId);
-                // -------------------------------------------------------
             }
 
-            finalAnswer = "Dạ, câu hỏi này hiện chưa có trong dữ liệu văn bản.\n\n" +
-                          "🚀 **Đệ đã chuyển câu hỏi về nhóm hỗ trợ.**\n" +
-                          "Sư huynh vui lòng giữ màn hình này, câu trả lời sẽ hiện ra ngay khi có phản hồi ạ! ⏳";
+            // Trả lời mặc định cũng phải phân tách ngôn ngữ
+            if (isChinese) {
+                finalAnswer = "对不起，目前文本数据中没有这个问题。\n\n" +
+                              "🚀 **我已经将问题转交给支持团队。**\n" +
+                              "师兄请保持此屏幕打开，收到回复后会立刻显示！ ⏳";
+            } else {
+                finalAnswer = "Dạ, câu hỏi này hiện chưa có trong dữ liệu văn bản.\n\n" +
+                              "🚀 **Đệ đã chuyển câu hỏi về nhóm hỗ trợ.**\n" +
+                              "Sư huynh vui lòng giữ màn hình này, câu trả lời sẽ hiện ra ngay khi có phản hồi ạ! ⏳";
+            }
 
         } else {
-            const isChinese = /[\u4e00-\u9fa5]/.test(aiResponse);
-
+            // GẮN TIÊU ĐỀ DỰA TRÊN NGÔN NGỮ CỦA "CÂU HỎI", KHÔNG PHẢI "CÂU TRẢ LỜI"
             if (isChinese) {
                 finalAnswer = "**来自虚拟志愿者的回答：**\n\n" + aiResponse;
             } else {

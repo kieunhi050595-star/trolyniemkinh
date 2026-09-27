@@ -597,6 +597,11 @@ app.post('/api/facebook-webhook', async (req, res) => {
                 let userQuestion = webhook_event.message.text;
                 console.log(`💬 FB User ${sender_psid} hỏi: ${userQuestion}`);
 
+                if (userQuestion.length > 1000) {
+                    await sendFacebookMessage(sender_psid, "Dạ, câu hỏi của Sư huynh dài quá, Sư huynh tóm tắt lại cho đệ dễ hiểu nhé!");
+                    continue; // Bỏ qua không xử lý câu hỏi này nữa
+                }
+
                 trackAndNotifyNewUser(sender_psid, "Facebook Messenger");
                 
                 // 1. Tải dữ liệu kiến thức (Context)

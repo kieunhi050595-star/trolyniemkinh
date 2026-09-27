@@ -218,10 +218,25 @@
             const sanitizerDiv = document.createElement('div');
             sanitizerDiv.textContent = text;
             let sanitizedText = sanitizerDiv.innerHTML;
+            
+            // Xử lý in đậm và in nghiêng
             sanitizedText = sanitizedText.replace(/\*\*(.*?)\*\*/g, '<span class="font-bold">$1</span>');
             sanitizedText = sanitizedText.replace(/_(.*?)_/g, '<span class="italic">$1</span>');
+            
+            // Xử lý Link và Ảnh
             const urlRegex = /(https?:\/\/[^\s<>"']+)/g;
-            const linkifiedText = sanitizedText.replace(urlRegex, '<a href="$&" target="_blank" rel="noopener noreferrer">Liên Kết</a>');
+            let linkifiedText = sanitizedText.replace(urlRegex, function(url) {
+                // Kiểm tra xem đuôi URL có phải là file ảnh không (hỗ trợ cả các link có tham số phía sau ?)
+                if (url.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i)) {
+                    // Nếu là ảnh -> Hiển thị thẳng ảnh lên khung chat và cho phép click để phóng to
+                    return `<img src="${url}" class="chat-image" alt="Hình ảnh hướng dẫn" onclick="window.open('${url}', '_blank')">`;
+                } else {
+                    // Nếu là link web bình thường -> Hiển thị nút "Liên Kết"
+                    return `<a href="${url}" target="_blank" rel="noopener noreferrer">Liên Kết</a>`;
+                }
+            });
+            
+            // Xuống dòng
             return linkifiedText.replace(/\n/g, '<br>');
         }
 

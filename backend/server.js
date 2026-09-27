@@ -244,6 +244,10 @@ app.post('/api/chat', async (req, res) => {
         const { question, socketId } = req.body;
         if (!question) return res.status(400).json({ error: 'Thiếu câu hỏi.' });
 
+        if (question.length > 1000) {
+            return res.json({ answer: "Dạ, câu hỏi của Sư huynh dài quá, Sư huynh tóm tắt lại cho đệ dễ hiểu nhé!" });
+        }
+
         const context = await getDocumentContext();
 
         // --- TÍNH NĂNG MỚI: NHẮN TIN TRỰC TIẾP (@psv : nội dung) ---

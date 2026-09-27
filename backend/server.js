@@ -21,6 +21,26 @@ const io = new Server(server, {
 const pendingRequests = new Map();
 const socketToMsgId = new Map();
 
+// --- BỘ DỌN RÁC CHỐNG TRÀN RAM ---
+// Quét mỗi 1 giờ (3600000 ms) một lần
+setInterval(() => {
+    const now = Date.now();
+    const MAX_AGE = 24 * 60 * 60 * 1000; // Thời hạn: 24 giờ
+    let deletedCount = 0;
+
+    for (const [msgId, data] of pendingRequests.entries()) {
+        // Nếu tin nhắn đã treo quá 24h -> Xóa bỏ
+        if (now - data.timestamp > MAX_AGE) {
+            pendingRequests.delete(msgId);
+            deletedCount++;
+        }
+    }
+    
+    if (deletedCount > 0) {
+        console.log(`🧹 Đã dọn dẹp ${deletedCount} tin nhắn treo quá 24h để giải phóng RAM.`);
+    }
+}, 60 * 60 * 1000);
+
 const FB_VERIFY_TOKEN = process.env.FB_VERIFY_TOKEN || "";
 const FB_PAGE_ACCESS_TOKEN = process.env.FB_PAGE_ACCESS_TOKEN || "";
 
@@ -47,37 +67,41 @@ io.on('connection', (socket) => {
 });
 
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '1mb' }));
 
 // --- CƠ CHẾ CACHE DỮ LIỆU TẠI SERVER ---
 const DEFAULT_DOCUMENT_URL = "https://gist.githubusercontent.com/kieunhi050595-star/ddecde18f83b77d06a117a9fcf349188/raw/dulieu.txt";
 
-let globalContextCache = ""; // Biến lưu trữ dữ liệu trên RAM
+let globalContextCache = ""; 
 let lastFetchTime = 0;
-const CACHE_TTL = 10 * 60 * 1000; // 10 phút (Tính bằng mili-giây)
+const CACHE_TTL = 10 * 60 * 1000; // 10 phút
+let isFetching = false; // Bổ sung biến Khóa (Lock)
 
 async function getDocumentContext() {
     const now = Date.now();
     
-    // Nếu đã có cache và chưa hết hạn (10 phút), dùng luôn không cần tải lại
-    if (globalContextCache && (now - lastFetchTime < CACHE_TTL)) {
+    // 1. Chống Cache Stampede: 
+    // Nếu cache còn hạn HOẶC đang có một luồng khác đang tải rồi -> Trả về bản cũ ngay lập tức
+    if (globalContextCache && ((now - lastFetchTime < CACHE_TTL) || isFetching)) {
         return globalContextCache;
     }
 
+    isFetching = true; // Bật khóa: Thông báo là "Tôi đang tải rồi, các request khác đừng tải nữa"
     try {
         console.log("🔄 Đang cập nhật dữ liệu mới từ GitHub...");
-        const timeStamp = new Date().getTime();
-        const response = await axios.get(`${DEFAULT_DOCUMENT_URL}?v=${timeStamp}`);
+        // Dùng 'now' để tạo mốc thời gian chống cache từ trình duyệt/mạng
+        const response = await axios.get(`${DEFAULT_DOCUMENT_URL}?v=${now}`);
         
         globalContextCache = response.data;
         lastFetchTime = now;
         console.log("✅ Cập nhật dữ liệu thành công!");
-        
-        return globalContextCache;
     } catch (error) {
         console.error("❌ Lỗi tải file dữ liệu .txt:", error.message);
-        return globalContextCache; // Nếu lỗi, trả về bản cache cũ
+    } finally {
+        isFetching = false; // Tắt khóa để sau 10 phút nữa hệ thống tiếp tục tải lại được
     }
+    
+    return globalContextCache;
 }
 
 // Gọi hàm này ngay khi khởi động server để nạp sẵn dữ liệu
@@ -251,7 +275,13 @@ app.post('/api/chat', async (req, res) => {
                 // 3. Lưu lại kết nối để Admin trả lời lại được (Quan trọng)
                 if (teleRes.data && teleRes.data.result && socketId) {
                     const msgId = teleRes.data.result.message_id;
-                    pendingRequests.set(msgId, socketId);
+                    
+                    // LƯU KÈM THỜI GIAN ĐỂ DỌN RÁC (Đã sửa đổi)
+                    pendingRequests.set(msgId, { 
+                        socketId: socketId, 
+                        timestamp: Date.now() 
+                    });
+                    
                     if (!socketToMsgId.has(socketId)) socketToMsgId.set(socketId, []);
                     socketToMsgId.get(socketId).push(msgId);
                 }
@@ -351,7 +381,10 @@ app.post('/api/chat', async (req, res) => {
                 const msgId = teleRes.data.result.message_id;
                 
                 // Lưu xuôi (để Webhook tìm User)
-                pendingRequests.set(msgId, socketId);
+                pendingRequests.set(msgId, { 
+                    socketId: socketId, 
+                    timestamp: Date.now() 
+                });
                 
                 // ---> THÊM ĐOẠN NÀY (Lưu ngược để dọn dẹp khi User thoát)
                 if (!socketToMsgId.has(socketId)) {
@@ -403,9 +436,10 @@ app.post('/api/telegram-webhook', async (req, res) => {
 
             // Cách 1: Tìm trong RAM (Ưu tiên nếu server chưa restart)
             if (pendingRequests.has(originalMsgId)) {
-                userSocketId = pendingRequests.get(originalMsgId);
+                // ĐÃ SỬA: Thêm .socketId vào cuối vì giờ nó là 1 Object
+                userSocketId = pendingRequests.get(originalMsgId).socketId; 
                 console.log(`✅ Found User in RAM: ${userSocketId}`);
-            } 
+            }
             // Cách 2: Tìm trong nội dung tin nhắn gốc (Dự phòng khi mất RAM)
             else if (replyMsg.text || replyMsg.caption) {
                 const originalText = replyMsg.text || replyMsg.caption || "";
@@ -431,7 +465,7 @@ app.post('/api/telegram-webhook', async (req, res) => {
                         const downloadUrl = `https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${filePath}`;
                         
                         const imageRes = await axios.get(downloadUrl, { responseType: 'arraybuffer' });
-                        const base64Image = Buffer.from(imageRes.data, 'binary').toString('base64');
+                        const base64Image = Buffer.from(imageRes.data).toString('base64');
                         const imgSrc = `data:image/jpeg;base64,${base64Image}`;
 
                         io.to(userSocketId).emit('admin_reply_image', imgSrc);

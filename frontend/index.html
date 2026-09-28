@@ -89,6 +89,18 @@
             display: block;
             cursor: pointer;
         }
+
+        /* CSS MỚI CHO VIDEO */
+        .chat-video {
+            max-width: 100%;
+            border-radius: 12px;
+            margin-top: 8px;
+            margin-bottom: 8px;
+            border: 1px solid rgba(0,0,0,0.1);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: block;
+            background-color: #000; /* Nền đen cho video */
+        }
     </style>
 </head>
 <body class="bg-stone-100 text-stone-800">
@@ -224,15 +236,26 @@
             sanitizedText = sanitizedText.replace(/\*\*(.*?)\*\*/g, '<span class="font-bold">$1</span>');
             sanitizedText = sanitizedText.replace(/_(.*?)_/g, '<span class="italic">$1</span>');
             
-            // Xử lý Link và Ảnh
+            // Xử lý Link, Ảnh và VIDEO
             const urlRegex = /(https?:\/\/[^\s<>"']+)/g;
             let linkifiedText = sanitizedText.replace(urlRegex, function(url) {
-                // Kiểm tra xem đuôi URL có phải là file ảnh không (hỗ trợ cả các link có tham số phía sau ?)
+                
+                // 1. Kiểm tra nếu là link ảnh
                 if (url.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i)) {
-                    // Nếu là ảnh -> Hiển thị thẳng ảnh lên khung chat và cho phép click để phóng to
                     return `<img src="${url}" class="chat-image" alt="Hình ảnh hướng dẫn" onclick="window.open('${url}', '_blank')">`;
-                } else {
-                    // Nếu là link web bình thường -> Hiển thị nút "Liên Kết"
+                } 
+                // 2. Kiểm tra nếu là link VIDEO (Chứa chiase.pmtl.site/dl/ hoặc đuôi .mp4)
+                else if (url.includes("chiase.pmtl.site/dl/") || url.match(/\.(mp4|webm|ogg)(\?.*)?$/i)) {
+                    return `
+                        <video controls class="chat-video">
+                            <source src="${url}" type="video/mp4">
+                            Trình duyệt của Sư huynh không hỗ trợ phát video.
+                        </video>
+                        <a href="${url}" target="_blank" rel="noopener noreferrer" style="font-size: 12px; padding: 4px 10px; background-color: #8D6E63; color: white !important;">⬇️ Tải video này</a>
+                    `;
+                } 
+                // 3. Nếu là link website bình thường
+                else {
                     return `<a href="${url}" target="_blank" rel="noopener noreferrer">Liên Kết</a>`;
                 }
             });

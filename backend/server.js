@@ -500,6 +500,33 @@ app.post('/api/telegram-webhook', async (req, res) => {
             await axios.post(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`, {
                 chat_id: message.chat.id,
                 text: `📊 <b>BÁO CÁO TỨC THỜI</b>\nSố lượt khách truy cập hôm nay tính đến hiện tại là: <b>${total}</b> người.`,
+                parse_mode: 'HTML'app.post('/api/telegram-webhook', async (req, res) => {
+    try {
+        const { message } = req.body;
+        
+        // Nếu không có message thì bỏ qua
+        if (!message) return res.sendStatus(200);
+        
+        // --- TÍNH NĂNG MỚI: NHẬN LỆNH TỪ ADMIN ---
+        
+        // 1. Xử lý lệnh /start
+        if (message.text && message.text.trim().toLowerCase() === '/start') {
+            await axios.post(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`, {
+                chat_id: message.chat.id,
+                text: `👋 Chào Admin! Bot đang hoạt động bình thường.\n\n👉 Nhấn lệnh /baocao để xem lượng khách truy cập hôm nay nhé!`,
+                parse_mode: 'HTML'
+            });
+            return res.sendStatus(200); // Trả về thành công và kết thúc
+        }
+
+        // 2. Nếu admin gõ lệnh /baocao trên Telegram
+        if (message.text && message.text.trim().toLowerCase() === '/baocao') {
+            const total = dailyUsers.size;
+            
+            // Gửi trả lại báo cáo ngay lập tức
+            await axios.post(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`, {
+                chat_id: message.chat.id,
+                text: `📊 <b>BÁO CÁO TỨC THỜI</b>\nSố lượt khách truy cập hôm nay tính đến hiện tại là: <b>${total}</b> người.`,
                 parse_mode: 'HTML'
             });
             

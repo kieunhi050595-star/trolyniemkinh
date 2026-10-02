@@ -19,7 +19,6 @@ let sheetsClient = null;
 // Hàm khởi tạo kết nối Google Sheets
 async function initGoogleSheets() {
     try {
-        // Xử lý Private Key trên Render: Thường bị lỗi thay thế \n thành chuỗi ký tự '\n'
         let privateKey = process.env.GOOGLE_PRIVATE_KEY || "";
         privateKey = privateKey.replace(/\\n/g, '\n');
 
@@ -58,7 +57,6 @@ async function logToGoogleSheets(ip, question, answer, dailyOrder) {
         await sheetsClient.spreadsheets.values.append(request);
     } catch (error) {
         console.error("❌ Lỗi ghi log Google Sheets:", error.message);
-        // Không gửi cảnh báo Telegram liên tục nếu lỗi ghi sheet để tránh spam
     }
 }
 
@@ -95,11 +93,10 @@ const FB_PAGE_ACCESS_TOKEN = process.env.FB_PAGE_ACCESS_TOKEN || "";
 io.on('connection', (socket) => {
     console.log('👤 User Connected:', socket.id);
 
-    // Lấy IP & Ghi lại thông tin (Không báo Telegram ngay lập tức nữa)
+    // Lấy IP & Ghi lại thông tin
     let rawIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
     const userIp = rawIp.split(',')[0].trim(); 
     
-    // Gắn userIp vào socket object để lúc Chat còn biết ai đang hỏi
     socket.userIp = userIp; 
     trackNewUser(userIp); 
 
@@ -188,18 +185,15 @@ async function sendTelegramAlert(message) {
 }
 
 // --- TÍNH NĂNG THỐNG KÊ TRUY CẬP HẰNG NGÀY ---
-// Đổi Set thành Map để lưu theo dõi [userId] -> [Thứ tự khách trong ngày]
 const dailyUsers = new Map(); 
 
 function trackNewUser(userId) {
     if (!userId) return null;
     if (!dailyUsers.has(userId)) {
-        // Gán số thứ tự cho người dùng mới này
         const orderNumber = dailyUsers.size + 1;
         dailyUsers.set(userId, orderNumber);
         return orderNumber;
     }
-    // Trả về số thứ tự cũ nếu đã truy cập
     return dailyUsers.get(userId);
 }
 
@@ -262,7 +256,6 @@ app.post('/api/chat', async (req, res) => {
         const { question, socketId } = req.body;
         if (!question) return res.status(400).json({ error: 'Thiếu câu hỏi.' });
 
-        // Tìm IP của khách từ socketId (lấy từ objects lưu sẵn)
         let clientIp = "Unknown IP";
         if (io.sockets.sockets.get(socketId)) {
             clientIp = io.sockets.sockets.get(socketId).userIp || "Unknown IP";
@@ -309,7 +302,6 @@ app.post('/api/chat', async (req, res) => {
                     socketToMsgId.get(socketId).push(msgId);
                 }
 
-                // Ghi log lên sheets
                 logToGoogleSheets(clientIp, question, "Chuyển tiếp cho Ban Quản Trị", dailyOrder);
                 return res.json({ answer: "✅ Đệ đã chuyển tin nhắn riêng của Sư huynh tới Ban quản trị. Sư huynh vui lòng giữ kết nối và chờ phản hồi nhé! 🙏" });
 
@@ -398,7 +390,7 @@ app.post('/api/chat', async (req, res) => {
         }
 
         if (finishReason === "MAX_TOKENS") {
-            console.log("⚠️ Cảnh báo: Trả lời quá dài bị cắt ngang (MAX_TOKENS).");
+            console.log("⚠️️ Cảnh báo: Trả lời quá dài bị cắt ngang (MAX_TOKENS).");
             if (isChinese) {
                  aiResponse += "\n\n*(抱歉，因为内容太长，我先暂停在这里。师兄可以针对每个具体部分详细提问！)*";
             } else {
@@ -485,22 +477,6 @@ app.post('/api/chat', async (req, res) => {
 });
 
 app.post('/api/telegram-webhook', async (req, res) => {
-    try {
-        const { message } = req.body;
-        
-        // Nếu không có message thì bỏ qua
-        if (!message) return res.sendStatus(200);
-        
-        // --- TÍNH NĂNG MỚI: NHẬN LỆNH TỪ ADMIN ---
-        // Nếu admin gõ lệnh /baocao trên Telegram
-        if (message.text && message.text.trim().toLowerCase() === '/baocao') {
-            const total = dailyUsers.size;
-            
-            // Gửi trả lại báo cáo ngay lập tức
-            await axios.post(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`, {
-                chat_id: message.chat.id,
-                text: `📊 <b>BÁO CÁO TỨC THỜI</b>\nSố lượt khách truy cập hôm nay tính đến hiện tại là: <b>${total}</b> người.`,
-                parse_mode: 'HTML'app.post('/api/telegram-webhook', async (req, res) => {
     try {
         const { message } = req.body;
         

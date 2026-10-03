@@ -310,6 +310,22 @@ app.post('/api/chat', async (req, res) => {
                 return res.json({ answer: "❌ Lỗi kết nối, không gửi được tin nhắn. Sư huynh thử lại sau nhé." });
             }
         }
+
+        // ========================================================
+        // THIẾT QUÂN LUẬT: CHẶN CÁC CÂU HỎI VỀ GIẤC MƠ / CHIÊM BAO
+        // ========================================================
+        const dreamRegex = /(mơ thấy|giấc mơ|nằm mơ|chiêm bao|mộng thấy|nằm mộng|đệ mộng|mình mơ|đệ mơ|giải mã giấc mơ)/i;
+        
+        if (dreamRegex.test(question)) {
+            const dreamAnswer = "Dạ Sư huynh vui lòng tra cứu các khai thị của Sư Phụ về giấc mơ tại địa chỉ : https://blogs.pmtl.site/tim-kiem/";
+            
+            // Ghi log lên Google Sheets để admin vẫn theo dõi được
+            logToGoogleSheets(clientIp, question, dreamAnswer, dailyOrder);
+            
+            // Trả về ngay lập tức, ngắt luồng không gọi Gemini API nữa
+            return res.json({ answer: dreamAnswer });
+        }
+        // ========================================================
         
         const safetySettings = [
             { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },

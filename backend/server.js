@@ -319,64 +319,51 @@ app.post('/api/chat', async (req, res) => {
         ];
 
         const isChinese = /[\u4e00-\u9fa5]/.test(question);
-        let promptGoc = "";
-        let promptDienGiai = "";
+        
+        // 1. TÁCH RIÊNG LỆNH HỆ THỐNG (SYSTEM INSTRUCTION)
+        let systemRules = "";
+        let userContent = "";
 
         if (isChinese) {
-            promptGoc = `你是一个绝对准确的信息提取工具。你的任务是仅从提供的“源文本”中提取用户问题的答案。
-
-            **必须严格遵守的规则：**
-            1. **唯一数据源：** 仅允许使用“源文本”中的信息。绝对不可使用外部知识。
-            2. **分点说明：** 不要写成长篇大段。请将每个要点分成单独的要点符号。
-            3. **如果找不到信息，请准确回答：** "NO_INFO_FOUND"。
-            4. **称呼：** 你自称 "弟" (đệ)，称呼提问者为 "师兄" (Sư huynh)。
-            5. **格式：** 保持简明扼要，直奔主题，直接返回纯 URL 链接。
+            systemRules = `你是一个绝对准确的信息提取工具。你的任务是仅从提供的“源文本”中提取用户问题的答案。
+            **必须严格遵守的绝对规则：**
+            1. **禁止推理与联想：** 只有当源文本中明确、直接提到与问题相关的信息时才回答。绝对不允许将相似的概念等同起来（例如：不要把“洗碗”等同于“打扫/洗澡”）。
+            2. **唯一数据源：** 绝对不可使用外部知识。
+            3. **如果找不到直接信息，请准确回答：** "NO_INFO_FOUND"。不要找借口，不要解释。
+            4. **分点说明：** 简明扼要，直奔主题。
+            5. **称呼：** 你自称 "弟" (đệ)，称呼提问者为 "师兄" (Sư huynh)。
             6. **语言强制：** 必须使用 100% 中文回答。绝对不要在答案中混入任何越南语。
-            7. **关于 NNN：** 指导填写 NNN 时，只能提供英文格式 (例如: Karmic creditor of...)。绝对不要建议使用越南文写 "Thổ Địa", "Oan gia trái chủ", "Vong nhi" 等词。
-
-            --- 源文本 ---
-            ${context}
-            --- 结束 ---
+            7. **关于 NNN：** 只能提供英文格式 (例如: Karmic creditor of...)。不要建议使用越南文。`;
             
-            问题: ${question}
-            答案:`;
-
-            promptDienGiai = `任务: 根据源文本回答问题 "${question}"（必须使用 100% 中文）。
-            如果没有相关信息，请回答 "NO_INFO_FOUND"。如果有，请重新表述主要观点（不要照抄原文）。
-            --- 源文本 ---
-            ${context}`;
+            userContent = `--- 源文本 ---\n${context}\n--- 结束 ---\n\n问题: ${question}\n答案:`;
+            
+            promptDienGiai = `任务: 根据源文本回答问题 "${question}"（必须使用 100% 中文）。绝对规则：禁止任何推理或外部知识。如果没有直接相关的文本，请回答 "NO_INFO_FOUND"。\n--- 源文本 ---\n${context}`;
 
         } else {
-            promptGoc = `Bạn là một công cụ trích xuất thông tin chính xác tuyệt đối. Nhiệm vụ của bạn là trích xuất câu trả lời cho câu hỏi của người dùng CHỈ từ trong VĂN BẢN NGUỒN được cung cấp.
-
+            systemRules = `Bạn là một công cụ trích xuất thông tin chính xác tuyệt đối. Nhiệm vụ của bạn là trích xuất câu trả lời CHỈ từ trong VĂN BẢN NGUỒN.
             **QUY TẮC BẮT BUỘC PHẢI TUÂN THEO TUYỆT ĐỐI:**
-            1. **NGUỒN DỮ LIỆU DUY NHẤT:** Chỉ được phép sử dụng thông tin có trong phần "VĂN BẢN NGUỒN". TUYỆT ĐỐI KHÔNG sử dụng kiến thức bên ngoài.
-            2. **CHIA NHỎ:** Không viết thành đoạn văn. Hãy tách từng ý quan trọng thành các gạch đầu dòng riêng biệt.         
-            3. **Nếu không có thông tin, trả lời chính xác:** "NO_INFO_FOUND".
-            4. **XƯNG HÔ:** Bạn tự xưng là "đệ" và gọi người hỏi là "Sư huynh".
-            5. **CHUYỂN ĐỔI NGÔI KỂ:** Chuyển "con/trò" thành "Sư huynh".
-            6. **XỬ LÝ LINK:** Trả về URL thuần túy, KHÔNG dùng Markdown link.
-            7. **PHONG CÁCH:** Trả lời NGẮN GỌN, SÚC TÍCH, đi thẳng vào vấn đề chính.
-            8. **NGÔN NGỮ:** Bắt buộc trả lời 100% bằng Tiếng Việt. Không pha trộn bất kỳ ngôn ngữ nào khác.
-            9. **QUY TẮC ĐIỀN NNN:** Khi hướng dẫn viết thông tin lên "Ngôi Nhà Nhỏ" (NNN), BẮT BUỘC chỉ cung cấp cú pháp tiếng Anh (VD: Karmic creditor of...). TUYỆT ĐỐI KHÔNG xúi giục hay đưa ra lựa chọn viết các từ tiếng Việt như "Thổ Địa", "Oan gia trái chủ", "Vong nhi" lên giấy.        
+            1. **CẤM SUY LUẬN VÀ NỘI SUY (ZERO-INFERENCE):** Chỉ trả lời khi văn bản nguồn có nhắc đến thông tin trực tiếp, cụ thể. TUYỆT ĐỐI KHÔNG tự ý đánh đồng các khái niệm tương tự nhau (Ví dụ: Không được đánh đồng "dọn dẹp chén bát" với "vệ sinh/tắm rửa", không đánh đồng "chó" với "mèo").
+            2. **NGUỒN DỮ LIỆU DUY NHẤT:** TUYỆT ĐỐI KHÔNG sử dụng kiến thức bên ngoài văn bản.
+            3. **KHÔNG CÓ THÔNG TIN TRỰC TIẾP:** Trả lời chính xác duy nhất chuỗi: "NO_INFO_FOUND". Không giải thích, không xin lỗi.
+            4. **CHIA NHỎ:** Không viết thành đoạn văn dài. Tách từng ý thành các gạch đầu dòng.
+            5. **XƯNG HÔ:** Bạn tự xưng là "đệ" và gọi người hỏi là "Sư huynh".
+            6. **CHUYỂN ĐỔI NGÔI KỂ:** Chuyển "con/trò" thành "Sư huynh". Trả về URL thuần túy, KHÔNG dùng Markdown link. Bắt buộc trả lời 100% bằng Tiếng Việt.
+            7. **QUY TẮC ĐIỀN NNN:** BẮT BUỘC chỉ cung cấp cú pháp tiếng Anh (VD: Karmic creditor of...). TUYỆT ĐỐI KHÔNG đưa ra lựa chọn viết tiếng Việt.`;
             
-            --- VĂN BẢN NGUỒN ---
-            ${context}
-            --- HẾT ---
-            
-            Câu hỏi: ${question}
-            Câu trả lời:`;
+            userContent = `--- VĂN BẢN NGUỒN ---\n${context}\n--- HẾT ---\n\nCâu hỏi: ${question}\nCâu trả lời:`;
 
-            promptDienGiai = `NV: Trả lời câu hỏi "${question}" dựa trên văn bản nguồn (BẮT BUỘC DÙNG 100% TIẾNG VIỆT).
-            Nếu KHÔNG CÓ thông tin, trả lời "NO_INFO_FOUND". Nếu CÓ, hãy diễn đạt lại ý chính (không trích nguyên văn).
-            --- VĂN BẢN NGUỒN ---
-            ${context}`;
+            promptDienGiai = `NV: Trả lời câu hỏi "${question}" dựa trên văn bản nguồn (BẮT BUỘC DÙNG 100% TIẾNG VIỆT). QUY TẮC TUYỆT ĐỐI: CẤM SUY LUẬN. Chỉ dùng thông tin trực tiếp trong văn bản. Nếu KHÔNG CÓ thông tin trực tiếp, trả lời "NO_INFO_FOUND".\n--- VĂN BẢN NGUỒN ---\n${context}`;
         }
 
+        // 2. CẤU TRÚC LẠI PAYLOAD CHO GEMINI API
         let response = await callGeminiWithRetry({
-            contents: [{ parts: [{ text: promptGoc }] }],
+            system_instruction: { parts: [{ text: systemRules }] }, // Đưa luật nghiêm ngặt vào System Instruction
+            contents: [{ parts: [{ text: userContent }] }],         // Chỉ chứa văn bản nguồn và câu hỏi ở User Content
             safetySettings: safetySettings,
-            generationConfig: { temperature: 0.1, maxOutputTokens: 8192 } 
+            generationConfig: { 
+                temperature: 0.0, // Đưa nhiệt độ về 0.0 để dập tắt hoàn toàn sự "sáng tạo/suy luận"
+                maxOutputTokens: 8192 
+            } 
         }, 0);
 
         let aiResponse = "";

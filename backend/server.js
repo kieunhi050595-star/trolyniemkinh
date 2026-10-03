@@ -1,4 +1,4 @@
-// server.js - Phiên bản Chatbot Txt + Real-time Telegram Support + Google Sheets Log
+// server.js - Phiên bản Chatbot Txt + Real-time Telegram Support + Google Sheets Log + RAG Filter
 
 const express = require('express');
 const axios = require('axios');
@@ -208,6 +208,43 @@ function escapeHtml(text) {
         .replace(/'/g, "&#039;");
 }
 
+
+// ========================================================
+// HÀM LỌC TỪ KHÓA (RAG) ĐỂ LẤY TOP 30 BÀI VIẾT LIÊN QUAN
+// ========================================================
+function filterRelevantContext(question, fullContext) {
+    const lines = fullContext.split('\n');
+    const keywords = question.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+    
+    let matchedLines = [];
+    
+    for (const line of lines) {
+        if (line.trim().length === 0) continue;
+        
+        const lowerLine = line.toLowerCase();
+        let score = 0;
+        
+        for (const kw of keywords) {
+            if (lowerLine.includes(kw)) {
+                score++;
+            }
+        }
+        
+        if (score > 0) {
+            matchedLines.push({ line: line.trim(), score: score });
+        }
+    }
+    
+    // Sắp xếp các dòng theo điểm số giảm dần
+    matchedLines.sort((a, b) => b.score - a.score);
+    
+    // Lấy Top 30 dòng liên quan nhất để đưa cho Gemini suy luận
+    const topResults = matchedLines.slice(0, 30).map(item => item.line);
+    
+    return topResults.length > 0 ? topResults.join('\n') : "";
+}
+
+
 // --- 2. HÀM GỌI API GEMINI ---
 async function callGeminiWithRetry(payload, keyIndex = 0, retryCount = 0) {
     if (keyIndex >= apiKeys.length) {
@@ -266,8 +303,6 @@ app.post('/api/chat', async (req, res) => {
             return res.json({ answer: "Dạ, câu hỏi của Sư huynh dài quá, Sư huynh tóm tắt lại cho đệ dễ hiểu nhé!" });
         }
 
-        const context = await getDocumentContext();
-
         // --- NHẮN TIN TRỰC TIẾP (@psv : nội dung) ---
         if (question.trim().toLowerCase().startsWith("@psv")) {
             const parts = question.split(':');
@@ -314,22 +349,60 @@ app.post('/api/chat', async (req, res) => {
         // ========================================================
         // THIẾT QUÂN LUẬT: CHẶN CÁC CÂU HỎI VỀ GIẤC MƠ / CHIÊM BAO
         // ========================================================
-        
-        // Regex mới: Bắt mọi từ "mơ", "mộng", "chiêm bao" đứng độc lập trong câu, 
-        // hoặc các cụm từ phổ biến (kể cả có dấu câu đi kèm)
         const dreamRegex = /(giấc mơ|nằm mơ|chiêm bao|mộng thấy|nằm mộng|đệ mộng|mình mơ|đệ mơ|giải mã giấc mơ|ngủ mơ|trong mơ|giấc mộng|ác mộng)|(^|\s|[.,:;!?])(mơ|mộng)(?=\s|$|[.,:;!?])/i;
         
         if (dreamRegex.test(question)) {
             const dreamAnswer = "Dạ Sư huynh vui lòng tra cứu các khai thị của Sư Phụ về giấc mơ tại địa chỉ : https://blogs.pmtl.site/tim-kiem/";
             
-            // Ghi log lên Google Sheets để admin vẫn theo dõi được
             logToGoogleSheets(clientIp, question, dreamAnswer, dailyOrder);
-            
-            // Trả về ngay lập tức, ngắt luồng không gọi Gemini API nữa
             return res.json({ answer: dreamAnswer });
         }
+
+
         // ========================================================
+        // LẤY DỮ LIỆU TỪ CACHE VÀ LỌC BẰNG RAG
+        // ========================================================
+        const fullContext = await getDocumentContext();
         
+        // Bốc 30 bài viết khớp từ khóa nhất
+        const context = filterRelevantContext(question, fullContext);
+
+        const isChinese = /[\u4e00-\u9fa5]/.test(question);
+
+        // Nếu người dùng hỏi 1 câu không hề có trong tiêu đề (ví dụ: chào đệ, thời tiết thế nào...)
+        if (!context) {
+            let finalAnswer = isChinese 
+                ? "对不起，目前文本数据中没有这个问题。\n\n🚀 **我已经将问题转交给支持团队。**\n师兄请保持此屏幕打开，收到回复后会立刻显示！ ⏳" 
+                : "Dạ, câu hỏi này hiện chưa có trong dữ liệu văn bản.\n\n🚀 **Đệ đã chuyển câu hỏi về nhóm hỗ trợ.**\nSư huynh vui lòng giữ màn hình này, câu trả lời sẽ hiện ra ngay khi có phản hồi ạ! ⏳";
+
+            const safeQuestion = escapeHtml(question);
+            const msgContent = `❓ <b>CÂU HỎI CẦN HỖ TRỢ (TỪ KHÓA MỚI)</b>\n\n"${safeQuestion}"\n\n👉 <i>Reply tin nhắn này để trả lời.</i>\n\n<pre>ID:${socketId}</pre>`;
+            
+            try {
+                const teleRes = await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+                    chat_id: TELEGRAM_CHAT_ID,
+                    text: msgContent,
+                    parse_mode: 'HTML'
+                });
+
+                if (teleRes.data && teleRes.data.result && socketId) {
+                    const msgId = teleRes.data.result.message_id;
+                    pendingRequests.set(msgId, { socketId: socketId, timestamp: Date.now() });
+                    if (!socketToMsgId.has(socketId)) socketToMsgId.set(socketId, []);
+                    socketToMsgId.get(socketId).push(msgId);
+                }
+            } catch (teleErr) {
+                console.error("⚠️ Lỗi gửi thông báo Telegram:", teleErr.message);
+            }
+
+            logToGoogleSheets(clientIp, question, "NO_INFO_FOUND - Chuyển Admin", dailyOrder);
+            return res.json({ answer: finalAnswer });
+        }
+
+
+        // ========================================================
+        // NẾU CÓ DỮ LIỆU KHỚP TỪ KHÓA -> CHẠY VÀO GEMINI
+        // ========================================================
         const safetySettings = [
             { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
             { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
@@ -337,48 +410,38 @@ app.post('/api/chat', async (req, res) => {
             { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
         ];
 
-        const isChinese = /[\u4e00-\u9fa5]/.test(question);
-        
-        // 1. TÁCH RIÊNG LỆNH HỆ THỐNG (SYSTEM INSTRUCTION)
         let systemRules = "";
         let userContent = "";
 
         if (isChinese) {
-            systemRules = `你是一个绝对准确的信息提取工具。你的任务是仅从提供的“源文本”中提取用户问题的答案。
+            systemRules = `你是一个专业的文献检索助手。你的任务是理解用户的意图，并仅从提供的“源文本”中提取最相关的文章。
             **必须严格遵守的绝对规则：**
-            1. **禁止推理与联想：** 只有当源文本中明确、直接提到与问题相关的信息时才回答。绝对不允许将相似的概念等同起来（例如：不要把“洗碗”等同于“打扫/洗澡”）。
-            2. **唯一数据源：** 绝对不可使用外部知识。
-            3. **如果找不到直接信息，请准确回答：** "NO_INFO_FOUND"。不要找借口，不要解释。
-            4. **分点说明：** 简明扼要，直奔主题。
-            5. **称呼：** 你自称 "弟" (đệ)，称呼提问者为 "师兄" (Sư huynh)。
-            6. **语言强制：** 必须使用 100% 中文回答。绝对不要在答案中混入任何越南语。
+            1. **语义推理：** 允许分析用户意图以匹配相似的标题（例如：“生病”可以匹配“治病”，“求子”可以匹配“怀孕”等）。
+            2. **原文引用：** 找到相关文章后，必须原封不动地引用源文本中的格式来回答，格式必须是：“* 文章标题 : 文章链接”。
+            3. **唯一数据源：** 绝对不可使用外部知识，绝对不能捏造源文本中不存在的链接或标题。
+            4. **如果没有直接信息：** 请准确回答："NO_INFO_FOUND"。不要找借口，不要解释。
+            5. **称呼：** 你自称 "弟" (đệ)，称呼提问者为 "师兄" (Sư huynh)。必须使用 100% 中文回答。`;
             
             userContent = `--- 源文本 ---\n${context}\n--- 结束 ---\n\n问题: ${question}\n答案:`;
             
-            promptDienGiai = `任务: 根据源文本回答问题 "${question}"（必须使用 100% 中文）。绝对规则：禁止任何推理或外部知识。如果没有直接相关的文本，请回答 "NO_INFO_FOUND"。\n--- 源文本 ---\n${context}`;
-
         } else {
-            systemRules = `Bạn là một công cụ trích xuất thông tin chính xác tuyệt đối. Nhiệm vụ của bạn là trích xuất câu trả lời CHỈ từ trong VĂN BẢN NGUỒN.
+            systemRules = `Bạn là một trợ lý ảo tra cứu tài liệu chuyên nghiệp. Nhiệm vụ của bạn là suy luận, đọc hiểu ý định của người dùng và tìm ra các bài viết phù hợp nhất CHỈ từ VĂN BẢN NGUỒN.
             **QUY TẮC BẮT BUỘC PHẢI TUÂN THEO TUYỆT ĐỐI:**
-            1. **CẤM SUY LUẬN VÀ NỘI SUY (ZERO-INFERENCE):** Chỉ trả lời khi văn bản nguồn có nhắc đến thông tin trực tiếp, cụ thể. TUYỆT ĐỐI KHÔNG tự ý đánh đồng các khái niệm tương tự nhau (Ví dụ: Không được đánh đồng "dọn dẹp chén bát" với "vệ sinh/tắm rửa", không đánh đồng "chó" với "mèo").
-            2. **NGUỒN DỮ LIỆU DUY NHẤT:** TUYỆT ĐỐI KHÔNG sử dụng kiến thức bên ngoài văn bản.
-            3. **KHÔNG CÓ THÔNG TIN TRỰC TIẾP:** Trả lời chính xác duy nhất chuỗi: "NO_INFO_FOUND". Không giải thích, không xin lỗi.
-            4. **CHIA NHỎ:** Không viết thành đoạn văn dài. Tách từng ý thành các gạch đầu dòng.
-            5. **XƯNG HÔ:** Bạn tự xưng là "đệ" và gọi người hỏi là "Sư huynh".
-            6. **CHUYỂN ĐỔI NGÔI KỂ:** Chuyển "con/trò" thành "Sư huynh". Trả về URL thuần túy, KHÔNG dùng Markdown link. Bắt buộc trả lời 100% bằng Tiếng Việt.
+            1. **SUY LUẬN NGỮ NGHĨA:** Cho phép phân tích ý định của người dùng để khớp với các tiêu đề bài viết tương đồng (Ví dụ: "muốn có thai" có thể khớp với tiêu đề "cầu con", "đau ốm" khớp với "trị bệnh", "cãi nhau" khớp với "oán kết").
+            2. **TRÍCH DẪN NGUYÊN VĂN:** Khi tìm thấy bài viết phù hợp, BẮT BUỘC trả lời bằng cách trích dẫn nguyên văn dữ liệu bài viết theo đúng cấu trúc có trong nguồn: "* Tiêu đề bài viết : Link bài viết". 
+            3. **NGUỒN DỮ LIỆU DUY NHẤT:** TUYỆT ĐỐI KHÔNG sử dụng kiến thức bên ngoài, KHÔNG TỰ BỊA RA LINK hoặc tự tạo tiêu đề không có trong văn bản nguồn.
+            4. **NẾU KHÔNG CÓ THÔNG TIN LIÊN QUAN:** Trả lời chính xác duy nhất chuỗi: "NO_INFO_FOUND". Không giải thích, không xin lỗi.
+            5. **XƯNG HÔ VÀ TRÌNH BÀY:** Tự xưng là "đệ" và gọi người hỏi là "Sư huynh". Trình bày rõ ràng, mỗi bài viết một dòng. Bắt buộc trả lời 100% bằng Tiếng Việt.`;
             
-            userContent = `--- VĂN BẢN NGUỒN ---\n${context}\n--- HẾT ---\n\nCâu hỏi: ${question}\nCâu trả lời:`;
-
-            promptDienGiai = `NV: Trả lời câu hỏi "${question}" dựa trên văn bản nguồn (BẮT BUỘC DÙNG 100% TIẾNG VIỆT). QUY TẮC TUYỆT ĐỐI: CẤM SUY LUẬN. Chỉ dùng thông tin trực tiếp trong văn bản. Nếu KHÔNG CÓ thông tin trực tiếp, trả lời "NO_INFO_FOUND".\n--- VĂN BẢN NGUỒN ---\n${context}`;
+            userContent = `--- VĂN BẢN NGUỒN ---\n${context}\n--- HẾT ---\n\nCâu hỏi: ${question}\nCâu trả lời (hãy gửi kèm tiêu đề và link gốc):`;
         }
 
-        // 2. CẤU TRÚC LẠI PAYLOAD CHO GEMINI API
         let response = await callGeminiWithRetry({
-            system_instruction: { parts: [{ text: systemRules }] }, // Đưa luật nghiêm ngặt vào System Instruction
-            contents: [{ parts: [{ text: userContent }] }],         // Chỉ chứa văn bản nguồn và câu hỏi ở User Content
+            system_instruction: { parts: [{ text: systemRules }] }, 
+            contents: [{ parts: [{ text: userContent }] }],         
             safetySettings: safetySettings,
             generationConfig: { 
-                temperature: 0.0, // Đưa nhiệt độ về 0.0 để dập tắt hoàn toàn sự "sáng tạo/suy luận"
+                temperature: 0.0, 
                 maxOutputTokens: 8192 
             } 
         }, 0);
@@ -394,7 +457,7 @@ app.post('/api/chat', async (req, res) => {
         }
 
         if (finishReason === "MAX_TOKENS") {
-            console.log("⚠️️ Cảnh báo: Trả lời quá dài bị cắt ngang (MAX_TOKENS).");
+            console.log("⚠ Cảnh báo: Trả lời quá dài bị cắt ngang (MAX_TOKENS).");
             if (isChinese) {
                  aiResponse += "\n\n*(抱歉，因为内容太长，我先暂停在这里。师兄可以针对每个具体部分详细提问！)*";
             } else {
@@ -402,39 +465,17 @@ app.post('/api/chat', async (req, res) => {
             }
         } 
         else if ((finishReason === "RECITATION" || finishReason === "SAFETY" || !aiResponse) && finishReason !== "STOP") {
-            console.log(`⚠️ Bị chặn (Lỗi: ${finishReason}). Dùng Prompt cứu nguy siêu ngặt...`);
-            
-            if (isChinese) {
-                promptDienGiai = `任务: 根据源文本回答问题 "${question}"（必须使用 100% 中文）。
-                绝对规则：只能使用源文本中的信息。绝对不可使用外部知识，绝不能捏造信息。简明扼要地总结以避免版权错误。
-                --- 源文本 ---
-                ${context}`;
-            } else {
-                promptDienGiai = `NV: Trả lời câu hỏi "${question}" dựa trên văn bản nguồn (BẮT BUỘC DÙNG 100% TIẾNG VIỆT).
-                QUY TẮC TUYỆT ĐỐI: CHỈ được dùng thông tin trong văn bản nguồn. TUYỆT ĐỐI KHÔNG sử dụng kiến thức bên ngoài, KHÔNG tự bịa thêm thông tin. Viết tóm tắt ngắn gọn lại để tránh lỗi bản quyền.
-                --- VĂN BẢN NGUỒN ---
-                ${context}`;
-            }
-
-            response = await callGeminiWithRetry({
-                contents: [{ parts: [{ text: promptDienGiai }] }],
-                safetySettings: safetySettings,
-                generationConfig: { temperature: 0.1, maxOutputTokens: 8192 }
-            }, 0);
-
-            if (response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-                aiResponse = response.data.candidates[0].content.parts[0].text.trim();
-            } else {
-                aiResponse = "NO_INFO_FOUND";
-            }
+            console.log(`⚠️ Bị chặn (Lỗi: ${finishReason}).`);
+            aiResponse = "NO_INFO_FOUND";
         }
 
         let finalAnswer = "";
 
+        // NẾU GEMINI TRẢ VỀ NO_INFO_FOUND -> CHUYỂN TELEGRAM
         if (aiResponse.includes("NO_INFO_FOUND") || aiResponse.length < 5) {
             const safeQuestion = escapeHtml(question);
             const msgContent = `❓ <b>CÂU HỎI CẦN HỖ TRỢ</b>\n\n"${safeQuestion}"\n\n👉 <i>Reply tin nhắn này để trả lời.</i>\n\n<pre>ID:${socketId}</pre>`;
-        
+         
             try {
                 const teleRes = await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
                     chat_id: TELEGRAM_CHAT_ID,

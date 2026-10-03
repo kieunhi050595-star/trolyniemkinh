@@ -352,7 +352,6 @@ app.post('/api/chat', async (req, res) => {
             4. **分点说明：** 简明扼要，直奔主题。
             5. **称呼：** 你自称 "弟" (đệ)，称呼提问者为 "师兄" (Sư huynh)。
             6. **语言强制：** 必须使用 100% 中文回答。绝对不要在答案中混入任何越南语。
-            7. **关于 NNN：** 只能提供英文格式 (例如: Karmic creditor of...)。不要建议使用越南文。`;
             
             userContent = `--- 源文本 ---\n${context}\n--- 结束 ---\n\n问题: ${question}\n答案:`;
             
@@ -367,7 +366,6 @@ app.post('/api/chat', async (req, res) => {
             4. **CHIA NHỎ:** Không viết thành đoạn văn dài. Tách từng ý thành các gạch đầu dòng.
             5. **XƯNG HÔ:** Bạn tự xưng là "đệ" và gọi người hỏi là "Sư huynh".
             6. **CHUYỂN ĐỔI NGÔI KỂ:** Chuyển "con/trò" thành "Sư huynh". Trả về URL thuần túy, KHÔNG dùng Markdown link. Bắt buộc trả lời 100% bằng Tiếng Việt.
-            7. **QUY TẮC ĐIỀN NNN:** BẮT BUỘC chỉ cung cấp cú pháp tiếng Anh (VD: Karmic creditor of...). TUYỆT ĐỐI KHÔNG đưa ra lựa chọn viết tiếng Việt.`;
             
             userContent = `--- VĂN BẢN NGUỒN ---\n${context}\n--- HẾT ---\n\nCâu hỏi: ${question}\nCâu trả lời:`;
 

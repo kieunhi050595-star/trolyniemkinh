@@ -314,7 +314,10 @@ app.post('/api/chat', async (req, res) => {
         // ========================================================
         // THIẾT QUÂN LUẬT: CHẶN CÁC CÂU HỎI VỀ GIẤC MƠ / CHIÊM BAO
         // ========================================================
-        const dreamRegex = /(mơ thấy|giấc mơ|nằm mơ|chiêm bao|mộng thấy|nằm mộng|đệ mộng|mình mơ|đệ mơ|giải mã giấc mơ)/i;
+        
+        // Regex mới: Bắt mọi từ "mơ", "mộng", "chiêm bao" đứng độc lập trong câu, 
+        // hoặc các cụm từ phổ biến (kể cả có dấu câu đi kèm)
+        const dreamRegex = /(giấc mơ|nằm mơ|chiêm bao|mộng thấy|nằm mộng|đệ mộng|mình mơ|đệ mơ|giải mã giấc mơ|ngủ mơ|trong mơ|giấc mộng|ác mộng)|(^|\s|[.,:;!?])(mơ|mộng)(?=\s|$|[.,:;!?])/i;
         
         if (dreamRegex.test(question)) {
             const dreamAnswer = "Dạ Sư huynh vui lòng tra cứu các khai thị của Sư Phụ về giấc mơ tại địa chỉ : https://blogs.pmtl.site/tim-kiem/";

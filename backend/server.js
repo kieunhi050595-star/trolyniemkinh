@@ -338,7 +338,7 @@ app.post('/api/chat', async (req, res) => {
                 }
 
                 logToGoogleSheets(clientIp, question, "Chuyển tiếp cho Ban Quản Trị", dailyOrder);
-                return res.json({ answer: "✅ Đệ đã chuyển tin nhắn riêng của Sư huynh tới Ban quản trị. Sư huynh vui lòng giữ kết nối và chờ phản hồi nhé! 🙏" });
+                return res.json({ answer: "🙏Đệ đã chuyển tin nhắn riêng của Sư huynh tới Ban quản trị, Sư huynh có thể tìm kiếm khai thị trực tiếp tại : https://timkhaithi.pmtl.site/p/tim-kiem-khai-thi.html " });
 
             } catch (err) {
                 console.error("Lỗi gửi tin nhắn trực tiếp:", err.message);

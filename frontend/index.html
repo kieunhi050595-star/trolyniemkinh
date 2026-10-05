@@ -132,6 +132,7 @@
             visibility: hidden;
             backdrop-filter: blur(3px);
             transition: all 0.3s ease;
+            will-change: opacity, visibility;
         }
         #news-overlay.show {
             opacity: 1;
@@ -143,12 +144,13 @@
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.3);
             width: 92%;
             max-width: 600px;
-            max-height: 80vh; /* Tối đa 80% chiều cao màn hình */
+            max-height: 80vh; 
             display: flex;
             flex-direction: column;
             transform: scale(0.95);
             transition: transform 0.3s ease;
-            overflow: hidden; /* Cắt góc ôm trọn thanh thời gian */
+            overflow: hidden; 
+            will-change: transform;
         }
         #news-overlay.show #news-content-box {
             transform: scale(1);
@@ -645,8 +647,11 @@
                 newsBody.innerHTML = text;
 
                 // Hiện Popup lên màn hình
-                newsOverlay.classList.add('show');
-
+                requestAnimationFrame(() => {
+                    newsOverlay.classList.add('show');
+                    setTimeout(() => { newsProgress.style.width = '0%'; }, 50);
+                });
+              
                 // Kích hoạt thanh chạy thời gian 5s
                 setTimeout(() => { newsProgress.style.width = '0%'; }, 50);
 
@@ -684,7 +689,7 @@
         });
 
         // Kích hoạt sau khi trang tải xong 1 giây
-        setTimeout(fetchAndShowNews, 1000);
+        setTimeout(fetchAndShowNews, 3500);
     </script>
 </body>
 </html>

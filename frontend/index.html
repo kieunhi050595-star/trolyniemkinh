@@ -189,6 +189,7 @@
             const userProfile = document.getElementById('user-profile');
             if (user) {
                 currentUserUid = user.uid;
+                if (mySocketId) socket.emit('user_login', currentUserUid);
                 loginBtn.classList.add('hidden');
                 userProfile.classList.remove('hidden');
                 document.getElementById('user-avatar').src = user.photoURL;
@@ -430,6 +431,7 @@
                 body: JSON.stringify({
                     question: question,
                     socketId: mySocketId 
+                    uid: currentUserUid
                 })
             });
 

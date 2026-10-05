@@ -1,4 +1,4 @@
-// server.js - Phiên bản Chatbot Txt + Real-time Telegram Support + Google Sheets Log + RAG Filter
+// server.js - Phiên bản Chatbot Txt + Real-time Telegram Support + Google Sheets Log + RAG Filter + Smart Routing UID
 
 const express = require('express');
 const axios = require('axios');
@@ -6,7 +6,7 @@ const cors = require('cors');
 const http = require('http'); 
 const { Server } = require("socket.io"); 
 const cron = require('node-cron'); 
-const { google } = require('googleapis'); // Thư viện Google
+const { google } = require('googleapis');
 require('dotenv').config();
 
 const app = express();
@@ -16,7 +16,6 @@ const PORT = process.env.PORT || 3001;
 const SPREADSHEET_ID = process.env.MODEL_SPREADSHEET_ID;
 let sheetsClient = null;
 
-// Hàm khởi tạo kết nối Google Sheets
 async function initGoogleSheets() {
     try {
         let privateKey = process.env.GOOGLE_PRIVATE_KEY || "";
@@ -40,14 +39,13 @@ async function initGoogleSheets() {
 }
 initGoogleSheets();
 
-// Hàm Ghi Log lên Sheets
 async function logToGoogleSheets(ip, question, answer, dailyOrder) {
     if (!sheetsClient || !SPREADSHEET_ID) return;
     try {
         const timeNow = new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
         const request = {
             spreadsheetId: SPREADSHEET_ID,
-            range: 'phungsuvienao!A:E', // Tên tab là phungsuvienao
+            range: 'phungsuvienao!A:E', 
             valueInputOption: 'USER_ENTERED',
             insertDataOption: 'INSERT_ROWS',
             resource: {
@@ -60,48 +58,55 @@ async function logToGoogleSheets(ip, question, answer, dailyOrder) {
     }
 }
 
-// --- CẤU HÌNH SOCKET.IO ---
+// --- CẤU HÌNH SOCKET.IO & BỘ ĐỊNH TUYẾN ---
 const server = http.createServer(app);
-const io = new Server(server, {
-    cors: { origin: "*" }
-});
+const io = new Server(server, { cors: { origin: "*" } });
 
 const pendingRequests = new Map();
 const socketToMsgId = new Map();
+const activeUsers = new Map(); // BẢN ĐỒ ĐỊNH TUYẾN UID -> SOCKET.ID MỚI NHẤT
 
-// --- BỘ DỌN RÁC CHỐNG TRÀN RAM ---
+// Dọn rác
 setInterval(() => {
     const now = Date.now();
     const MAX_AGE = 24 * 60 * 60 * 1000; 
     let deletedCount = 0;
-
     for (const [msgId, data] of pendingRequests.entries()) {
         if (now - data.timestamp > MAX_AGE) {
             pendingRequests.delete(msgId);
             deletedCount++;
         }
     }
-    
-    if (deletedCount > 0) {
-        console.log(`🧹 Đã dọn dẹp ${deletedCount} tin nhắn treo quá 24h để giải phóng RAM.`);
-    }
+    if (deletedCount > 0) console.log(`🧹 Đã dọn dẹp ${deletedCount} tin nhắn treo quá 24h.`);
 }, 60 * 60 * 1000);
 
-const FB_VERIFY_TOKEN = process.env.FB_VERIFY_TOKEN || "";
-const FB_PAGE_ACCESS_TOKEN = process.env.FB_PAGE_ACCESS_TOKEN || "";
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || ""; 
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "";
 
 io.on('connection', (socket) => {
     console.log('👤 User Connected:', socket.id);
 
-    // Lấy IP & Ghi lại thông tin
     let rawIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
     const userIp = rawIp.split(',')[0].trim(); 
-    
     socket.userIp = userIp; 
     trackNewUser(userIp); 
 
+    // TÍNH NĂNG MỚI: Lắng nghe UID từ Frontend để định tuyến
+    socket.on('user_login', (uid) => {
+        if (uid) {
+            activeUsers.set(uid, socket.id); // Lưu socket.id mới nhất của UID này
+            socket.uid = uid;
+            console.log(`🔗 Cập nhật kết nối: UID [${uid}] đang dùng Socket [${socket.id}]`);
+        }
+    });
+
     socket.on('disconnect', () => {
         console.log('User Disconnected:', socket.id);
+        // Xóa UID khỏi danh sách đang online nếu socket này bị ngắt
+        if (socket.uid && activeUsers.get(socket.uid) === socket.id) {
+            activeUsers.delete(socket.uid);
+        }
+
         if (socketToMsgId.has(socket.id)) {
             const msgIds = socketToMsgId.get(socket.id);
             msgIds.forEach(id => pendingRequests.delete(id));
@@ -115,7 +120,6 @@ app.use(express.json({ limit: '1mb' }));
 
 // --- CƠ CHẾ CACHE DỮ LIỆU TẠI SERVER ---
 const DEFAULT_DOCUMENT_URL = "https://gist.githubusercontent.com/kieunhi050595-star/ddecde18f83b77d06a117a9fcf349188/raw/dulieu.txt";
-
 let globalContextCache = ""; 
 let lastFetchTime = 0;
 const CACHE_TTL = 10 * 60 * 1000; 
@@ -123,10 +127,7 @@ let isFetching = false;
 
 async function getDocumentContext() {
     const now = Date.now();
-    if (globalContextCache && ((now - lastFetchTime < CACHE_TTL) || isFetching)) {
-        return globalContextCache;
-    }
-
+    if (globalContextCache && ((now - lastFetchTime < CACHE_TTL) || isFetching)) return globalContextCache;
     isFetching = true; 
     try {
         console.log("🔄 Đang cập nhật dữ liệu mới từ GitHub...");
@@ -141,7 +142,6 @@ async function getDocumentContext() {
     }
     return globalContextCache;
 }
-
 getDocumentContext();
 
 app.get('/api/get-version', async (req, res) => {
@@ -150,43 +150,27 @@ app.get('/api/get-version', async (req, res) => {
     res.json({ version: firstLine });
 });
 
-// --- 1. XỬ LÝ DANH SÁCH KEY ---
 const rawKeys = process.env.GEMINI_API_KEYS || "";
 const apiKeys = rawKeys.split(',').map(key => key.trim()).filter(key => key.length > 0);
 
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || ""; 
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "";
+if (apiKeys.length > 0) console.log(`✅ Đã tìm thấy [${apiKeys.length}] API Keys.`);
+else console.error("❌ CẢNH BÁO: Chưa cấu hình API Key!");
 
-if (apiKeys.length > 0) {
-    console.log(`✅ Đã tìm thấy [${apiKeys.length}] API Keys.`);
-} else {
-    console.error("❌ CẢNH BÁO: Chưa cấu hình API Key!");
-}
-
-app.get('/api/health', (req, res) => {
-    res.status(200).json({ status: "OK", server: "Ready" });
-});
-
+app.get('/api/health', (req, res) => { res.status(200).json({ status: "OK" }); });
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// --- HÀM GỬI CẢNH BÁO TELEGRAM ---
 async function sendTelegramAlert(message) {
     if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT_ID) return; 
     try {
-        const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
-        await axios.post(url, {
+        await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
             chat_id: TELEGRAM_CHAT_ID,
             text: `🤖 <b>Phụng Sự Viên Ảo</b> 🚨\n\n${message}`,
             parse_mode: 'HTML'
         });
-    } catch (error) {
-        console.error("Lỗi gửi Telegram:", error.message);
-    }
+    } catch (error) {}
 }
 
-// --- TÍNH NĂNG THỐNG KÊ TRUY CẬP HẰNG NGÀY ---
 const dailyUsers = new Map(); 
-
 function trackNewUser(userId) {
     if (!userId) return null;
     if (!dailyUsers.has(userId)) {
@@ -197,64 +181,36 @@ function trackNewUser(userId) {
     return dailyUsers.get(userId);
 }
 
-// --- HÀM KHẮC PHỤC LỖI ESCAPEHTML ---
 function escapeHtml(text) {
     if (!text) return "";
-    return String(text)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+    return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
 
-
-// ========================================================
-// HÀM LỌC TỪ KHÓA (RAG) ĐỂ LẤY TOP 30 BÀI VIẾT LIÊN QUAN
-// ========================================================
 function filterRelevantContext(question, fullContext) {
     const lines = fullContext.split('\n');
     const keywords = question.toLowerCase().split(/\s+/).filter(w => w.length > 2);
-    
     let matchedLines = [];
-    
     for (const line of lines) {
         if (line.trim().length === 0) continue;
-        
         const lowerLine = line.toLowerCase();
         let score = 0;
-        
         for (const kw of keywords) {
-            if (lowerLine.includes(kw)) {
-                score++;
-            }
+            if (lowerLine.includes(kw)) score++;
         }
-        
-        if (score > 0) {
-            matchedLines.push({ line: line.trim(), score: score });
-        }
+        if (score > 0) matchedLines.push({ line: line.trim(), score: score });
     }
-    
-    // Sắp xếp các dòng theo điểm số giảm dần
     matchedLines.sort((a, b) => b.score - a.score);
-    
-    // Lấy Top 30 dòng liên quan nhất để đưa cho Gemini suy luận
     const topResults = matchedLines.slice(0, 30).map(item => item.line);
-    
     return topResults.length > 0 ? topResults.join('\n') : "";
 }
 
-
-// --- 2. HÀM GỌI API GEMINI ---
 async function callGeminiWithRetry(payload, keyIndex = 0, retryCount = 0) {
     if (keyIndex >= apiKeys.length) {
         if (retryCount < 1) {
-            console.log("🔁 Hết vòng Key, chờ 2s thử lại...");
             await sleep(2000);
             return callGeminiWithRetry(payload, 0, retryCount + 1);
         }
         const msg = "🆘 HẾT SẠCH API KEY! Hệ thống không thể phản hồi.";
-        console.error(msg);
         await sendTelegramAlert(msg);
         throw new Error("ALL_KEYS_EXHAUSTED");
     }
@@ -264,21 +220,13 @@ async function callGeminiWithRetry(payload, keyIndex = 0, retryCount = 0) {
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${currentKey}`;
 
     try {
-        const response = await axios.post(apiUrl, payload, {
-            headers: { 'Content-Type': 'application/json' },
-            timeout: 90000 
-        });
+        const response = await axios.post(apiUrl, payload, { headers: { 'Content-Type': 'application/json' }, timeout: 90000 });
         return response;
     } catch (error) {
         const status = error.response ? error.response.status : 0;
         const isTimeout = error.code === 'ECONNABORTED' || error.message.includes('timeout');
-    
         if (isTimeout || status === 429 || status === 400 || status === 403 || status >= 500) {
-            const errorReason = isTimeout ? 'Timeout' : `Mã ${status}`;
-            console.warn(`⚠️ Key ${keyIndex} gặp vấn đề (${errorReason}). Đổi Key...`);
-            
             if (status === 429) await sleep(1000); 
-            
             return callGeminiWithRetry(payload, keyIndex + 1, retryCount);
         }
         throw error;
@@ -290,93 +238,64 @@ app.post('/api/chat', async (req, res) => {
     if (apiKeys.length === 0) return res.status(500).json({ error: 'Chưa cấu hình API Key.' });
 
     try {
-        const { question, socketId } = req.body;
+        const { question, socketId, uid } = req.body; // NHẬN THÊM UID
         if (!question) return res.status(400).json({ error: 'Thiếu câu hỏi.' });
 
         let clientIp = "Unknown IP";
-        if (io.sockets.sockets.get(socketId)) {
-            clientIp = io.sockets.sockets.get(socketId).userIp || "Unknown IP";
-        }
+        if (io.sockets.sockets.get(socketId)) clientIp = io.sockets.sockets.get(socketId).userIp || "Unknown IP";
         const dailyOrder = trackNewUser(clientIp) || "N/A";
 
-        if (question.length > 1000) {
-            return res.json({ answer: "Dạ, câu hỏi của Sư huynh dài quá, Sư huynh tóm tắt lại cho đệ dễ hiểu nhé!" });
-        }
+        if (question.length > 1000) return res.json({ answer: "Dạ, câu hỏi của Sư huynh dài quá, Sư huynh tóm tắt lại cho đệ dễ hiểu nhé!" });
 
-        // --- NHẮN TIN TRỰC TIẾP (@psv : nội dung) ---
+        // --- NHẮN TIN TRỰC TIẾP (@psv) ---
         if (question.trim().toLowerCase().startsWith("@psv")) {
             const parts = question.split(':');
-            if (parts.length < 2) {
-                return res.json({ answer: "Sư huynh vui lòng nhập nội dung sau dấu hai chấm.\nVí dụ: @psv : Cho mình hỏi việc riêng này với ạ" });
-            }
-            
+            if (parts.length < 2) return res.json({ answer: "Sư huynh vui lòng nhập nội dung sau dấu hai chấm.\nVí dụ: @psv : Cho mình hỏi việc riêng này với ạ" });
             const msgContent = parts.slice(1).join(':').trim();
-            
-            if (!msgContent) {
-                return res.json({ answer: "Sư huynh chưa nhập nội dung tin nhắn ạ!" });
-            }
+            if (!msgContent) return res.json({ answer: "Sư huynh chưa nhập nội dung tin nhắn ạ!" });
 
             try {
                 const safeMsg = escapeHtml(msgContent); 
-                
                 const teleRes = await axios.post(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`, {
                     chat_id: process.env.TELEGRAM_CHAT_ID,
-                    text: `📨 <b>TIN NHẮN TRỰC TIẾP TỪ KHÁCH [IP: ${clientIp}]</b>\n\nNội dung: "${safeMsg}"\n\n👉 <i>Admin hãy Reply tin nhắn này để trả lời trực tiếp.</i>\n\n<pre>ID:${socketId}</pre>`,
+                    // BỔ SUNG UID VÀO CÚ PHÁP PRE DƯỚI CÙNG
+                    text: `📨 <b>TIN NHẮN TRỰC TIẾP TỪ KHÁCH [IP: ${clientIp}]</b>\n\nNội dung: "${safeMsg}"\n\n👉 <i>Admin hãy Reply tin nhắn này để trả lời trực tiếp.</i>\n\n<pre>ID:${socketId} | UID:${uid || 'none'}</pre>`,
                     parse_mode: 'HTML'
                 });
 
                 if (teleRes.data && teleRes.data.result && socketId) {
                     const msgId = teleRes.data.result.message_id;
-                    
-                    pendingRequests.set(msgId, { 
-                        socketId: socketId, 
-                        timestamp: Date.now() 
-                    });
-                    
+                    // LƯU KÈM UID VÀO MAP
+                    pendingRequests.set(msgId, { socketId: socketId, uid: uid, timestamp: Date.now() });
                     if (!socketToMsgId.has(socketId)) socketToMsgId.set(socketId, []);
                     socketToMsgId.get(socketId).push(msgId);
                 }
-
                 logToGoogleSheets(clientIp, question, "Chuyển tiếp cho Ban Quản Trị", dailyOrder);
-                return res.json({ answer: "🙏Đệ đã chuyển tin nhắn riêng của Sư huynh tới Ban quản trị, Sư huynh có thể tìm kiếm khai thị trực tiếp tại : https://timkhaithi.pmtl.site/p/tim-kiem-khai-thi.html " });
-
+                return res.json({ answer: "🙏Đệ đã chuyển tin nhắn riêng của Sư huynh tới Ban quản trị, Sư huynh chờ chút nhé!" });
             } catch (err) {
-                console.error("Lỗi gửi tin nhắn trực tiếp:", err.message);
                 return res.json({ answer: "❌ Lỗi kết nối, không gửi được tin nhắn. Sư huynh thử lại sau nhé." });
             }
         }
 
-        // ========================================================
-        // THIẾT QUÂN LUẬT: CHẶN CÁC CÂU HỎI VỀ GIẤC MƠ / CHIÊM BAO
-        // ========================================================
         const dreamRegex = /(giấc mơ|nằm mơ|chiêm bao|mộng thấy|nằm mộng|đệ mộng|mình mơ|đệ mơ|giải mã giấc mơ|ngủ mơ|trong mơ|giấc mộng|ác mộng)|(^|\s|[.,:;!?])(mơ|mộng)(?=\s|$|[.,:;!?])/i;
-        
         if (dreamRegex.test(question)) {
             const dreamAnswer = "Dạ Sư huynh vui lòng tra cứu các khai thị của Sư Phụ về giấc mơ tại địa chỉ : https://blogs.pmtl.site/tim-kiem/";
-            
             logToGoogleSheets(clientIp, question, dreamAnswer, dailyOrder);
             return res.json({ answer: dreamAnswer });
         }
 
-
-        // ========================================================
-        // LẤY DỮ LIỆU TỪ CACHE VÀ LỌC BẰNG RAG
-        // ========================================================
         const fullContext = await getDocumentContext();
-        
-        // Bốc 30 bài viết khớp từ khóa nhất
         const context = filterRelevantContext(question, fullContext);
-
         const isChinese = /[\u4e00-\u9fa5]/.test(question);
 
-        // Nếu người dùng hỏi 1 câu không hề có trong tiêu đề (ví dụ: chào đệ, thời tiết thế nào...)
         if (!context) {
             let finalAnswer = isChinese 
                 ? "对不起，目前文本数据中没有这个问题。\n\n🚀 **我已经将问题转交给支持团队。**\n师兄请保持此屏幕打开，收到回复后会立刻显示！ ⏳" 
                 : "Dạ, câu hỏi này hiện chưa có trong dữ liệu văn bản.\n\n🚀 **Đệ đã chuyển câu hỏi về nhóm hỗ trợ.**\nSư huynh có thể tra cứu ngay tại : https://timkhaithi.pmtl.site/p/tim-kiem-khai-thi.html ";
 
             const safeQuestion = escapeHtml(question);
-            const msgContent = `❓ <b>CÂU HỎI CẦN HỖ TRỢ (TỪ KHÓA MỚI)</b>\n\n"${safeQuestion}"\n\n👉 <i>Reply tin nhắn này để trả lời.</i>\n\n<pre>ID:${socketId}</pre>`;
+            // BỔ SUNG UID VÀO CÚ PHÁP PRE DƯỚI CÙNG
+            const msgContent = `❓ <b>CÂU HỎI CẦN HỖ TRỢ (TỪ KHÓA MỚI)</b>\n\n"${safeQuestion}"\n\n👉 <i>Reply tin nhắn này để trả lời.</i>\n\n<pre>ID:${socketId} | UID:${uid || 'none'}</pre>`;
             
             try {
                 const teleRes = await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
@@ -384,25 +303,18 @@ app.post('/api/chat', async (req, res) => {
                     text: msgContent,
                     parse_mode: 'HTML'
                 });
-
                 if (teleRes.data && teleRes.data.result && socketId) {
                     const msgId = teleRes.data.result.message_id;
-                    pendingRequests.set(msgId, { socketId: socketId, timestamp: Date.now() });
+                    // LƯU KÈM UID VÀO MAP
+                    pendingRequests.set(msgId, { socketId: socketId, uid: uid, timestamp: Date.now() });
                     if (!socketToMsgId.has(socketId)) socketToMsgId.set(socketId, []);
                     socketToMsgId.get(socketId).push(msgId);
                 }
-            } catch (teleErr) {
-                console.error("⚠️ Lỗi gửi thông báo Telegram:", teleErr.message);
-            }
-
+            } catch (teleErr) {}
             logToGoogleSheets(clientIp, question, "NO_INFO_FOUND - Chuyển Admin", dailyOrder);
             return res.json({ answer: finalAnswer });
         }
 
-
-        // ========================================================
-        // NẾU CÓ DỮ LIỆU KHỚP TỪ KHÓA -> CHẠY VÀO GEMINI
-        // ========================================================
         const safetySettings = [
             { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
             { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
@@ -410,45 +322,23 @@ app.post('/api/chat', async (req, res) => {
             { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
         ];
 
-        let systemRules = "";
-        let userContent = "";
-
-        if (isChinese) {
-            systemRules = `你是一个专业的文献检索助手。你的任务是理解用户的意图，并仅从提供的“源文本”中提取最相关的文章。
-            **必须严格遵守的绝对规则：**
-            1. **语义推理：** 允许分析用户意图以匹配相似的标题（例如：“生病”可以匹配“治病”，“求子”可以匹配“怀孕”等）。
-            2. **原文引用：** 找到相关文章后，必须原封不动地引用源文本中的格式来回答，格式必须是：“* 文章标题 : 文章链接”。
-            3. **唯一数据源：** 绝对不可使用外部知识，绝对不能捏造源文本中不存在的链接或标题。
-            4. **如果没有直接信息：** 请准确回答："NO_INFO_FOUND"。不要找借口，不要解释。
-            5. **称呼：** 你自称 "弟" (đệ)，称呼提问者为 "师兄" (Sư huynh)。必须使用 100% 中文回答。`;
+        let systemRules = isChinese ? 
+            `你是一个专业的文献检索助手... 必须使用 100% 中文回答。` : 
+            `Bạn là một trợ lý ảo tra cứu tài liệu chuyên nghiệp... Bắt buộc trả lời 100% bằng Tiếng Việt.`;
             
-            userContent = `--- 源文本 ---\n${context}\n--- 结束 ---\n\n问题: ${question}\n答案:`;
-            
-        } else {
-            systemRules = `Bạn là một trợ lý ảo tra cứu tài liệu chuyên nghiệp. Nhiệm vụ của bạn là suy luận, đọc hiểu ý định của người dùng và tìm ra các bài viết phù hợp nhất CHỈ từ VĂN BẢN NGUỒN.
-            **QUY TẮC BẮT BUỘC PHẢI TUÂN THEO TUYỆT ĐỐI:**
-            1. **SUY LUẬN NGỮ NGHĨA:** Cho phép phân tích ý định của người dùng để khớp với các tiêu đề bài viết tương đồng (Ví dụ: "muốn có thai" có thể khớp với tiêu đề "cầu con", "đau ốm" khớp với "trị bệnh", "cãi nhau" khớp với "oán kết").
-            2. **TRÍCH DẪN NGUYÊN VĂN:** Khi tìm thấy bài viết phù hợp, BẮT BUỘC trả lời bằng cách trích dẫn nguyên văn dữ liệu bài viết theo đúng cấu trúc có trong nguồn: "* Tiêu đề bài viết : Link bài viết". 
-            3. **NGUỒN DỮ LIỆU DUY NHẤT:** TUYỆT ĐỐI KHÔNG sử dụng kiến thức bên ngoài, KHÔNG TỰ BỊA RA LINK hoặc tự tạo tiêu đề không có trong văn bản nguồn.
-            4. **NẾU KHÔNG CÓ THÔNG TIN LIÊN QUAN:** Trả lời chính xác duy nhất chuỗi: "NO_INFO_FOUND". Không giải thích, không xin lỗi.
-            5. **XƯNG HÔ VÀ TRÌNH BÀY:** Tự xưng là "đệ" và gọi người hỏi là "Sư huynh". Trình bày rõ ràng, mỗi bài viết một dòng. Bắt buộc trả lời 100% bằng Tiếng Việt.`;
-            
-            userContent = `--- VĂN BẢN NGUỒN ---\n${context}\n--- HẾT ---\n\nCâu hỏi: ${question}\nCâu trả lời (hãy gửi kèm tiêu đề và link gốc):`;
-        }
+        let userContent = isChinese ? 
+            `--- 源文本 ---\n${context}\n--- 结束 ---\n\n问题: ${question}\n答案:` : 
+            `--- VĂN BẢN NGUỒN ---\n${context}\n--- HẾT ---\n\nCâu hỏi: ${question}\nCâu trả lời (hãy gửi kèm tiêu đề và link gốc):`;
 
         let response = await callGeminiWithRetry({
             system_instruction: { parts: [{ text: systemRules }] }, 
             contents: [{ parts: [{ text: userContent }] }],         
             safetySettings: safetySettings,
-            generationConfig: { 
-                temperature: 0.0, 
-                maxOutputTokens: 8192 
-            } 
+            generationConfig: { temperature: 0.0, maxOutputTokens: 8192 } 
         }, 0);
 
         let aiResponse = "";
         let finishReason = "";
-
         if (response.data?.candidates?.[0]) {
             finishReason = response.data.candidates[0].finishReason;
             if (response.data.candidates[0].content?.parts?.[0]?.text) {
@@ -457,24 +347,17 @@ app.post('/api/chat', async (req, res) => {
         }
 
         if (finishReason === "MAX_TOKENS") {
-            console.log("⚠ Cảnh báo: Trả lời quá dài bị cắt ngang (MAX_TOKENS).");
-            if (isChinese) {
-                 aiResponse += "\n\n*(抱歉，因为内容太长，我先暂停在这里。师兄可以针对每个具体部分详细提问！)*";
-            } else {
-                 aiResponse += "\n\n*(Dạ, do nội dung quá dài nên đệ xin phép tạm dừng ở đây. Sư huynh vui lòng đặt câu hỏi chi tiết hơn vào từng phần cụ thể nhé ạ!)*";
-            }
+            aiResponse += isChinese ? "\n\n*(抱歉，因为内容太长，我先暂停在这里...)*" : "\n\n*(Dạ, do nội dung quá dài nên đệ xin phép tạm dừng ở đây...)*";
         } 
         else if ((finishReason === "RECITATION" || finishReason === "SAFETY" || !aiResponse) && finishReason !== "STOP") {
-            console.log(`⚠️ Bị chặn (Lỗi: ${finishReason}).`);
             aiResponse = "NO_INFO_FOUND";
         }
 
         let finalAnswer = "";
-
-        // NẾU GEMINI TRẢ VỀ NO_INFO_FOUND -> CHUYỂN TELEGRAM
         if (aiResponse.includes("NO_INFO_FOUND") || aiResponse.length < 5) {
             const safeQuestion = escapeHtml(question);
-            const msgContent = `❓ <b>CÂU HỎI CẦN HỖ TRỢ</b>\n\n"${safeQuestion}"\n\n👉 <i>Reply tin nhắn này để trả lời.</i>\n\n<pre>ID:${socketId}</pre>`;
+            // BỔ SUNG UID VÀO CÚ PHÁP PRE DƯỚI CÙNG
+            const msgContent = `❓ <b>CÂU HỎI CẦN HỖ TRỢ</b>\n\n"${safeQuestion}"\n\n👉 <i>Reply tin nhắn này để trả lời.</i>\n\n<pre>ID:${socketId} | UID:${uid || 'none'}</pre>`;
          
             try {
                 const teleRes = await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
@@ -482,116 +365,96 @@ app.post('/api/chat', async (req, res) => {
                     text: msgContent,
                     parse_mode: 'HTML'
                 });
-
                 if (teleRes.data && teleRes.data.result && socketId) {
                     const msgId = teleRes.data.result.message_id;
-                    pendingRequests.set(msgId, { socketId: socketId, timestamp: Date.now() });
-                    
-                    if (!socketToMsgId.has(socketId)) {
-                        socketToMsgId.set(socketId, []);
-                    }
+                    pendingRequests.set(msgId, { socketId: socketId, uid: uid, timestamp: Date.now() });
+                    if (!socketToMsgId.has(socketId)) socketToMsgId.set(socketId, []);
                     socketToMsgId.get(socketId).push(msgId);
                 }
-            } catch (teleErr) {
-                console.error("⚠️ Lỗi gửi thông báo Telegram:", teleErr.message);
-            }
-
-            if (isChinese) {
-                finalAnswer = "对不起，目前文本数据中没有这个问题。\n\n🚀 **我已经将问题转交给支持团队。**\n师兄请保持此屏幕打开，收到回复后会立刻显示！ ⏳";
-            } else {
-                finalAnswer = "Dạ, câu hỏi này hiện chưa có trong dữ liệu văn bản.\n\n🚀 **Đệ đã chuyển câu hỏi về nhóm hỗ trợ.**\nSư huynh có thể tra cứu ngay tại : https://timkhaithi.pmtl.site/p/tim-kiem-khai-thi.html ";
-            }
-
+            } catch (teleErr) {}
+            finalAnswer = isChinese ? "对不起，目前文本数据中没有这个问题..." : "Dạ, câu hỏi này hiện chưa có trong dữ liệu văn bản...";
         } else {
-            if (isChinese) {
-                finalAnswer = "**来自虚拟志愿者的回答：**\n\n" + aiResponse;
-            } else {
-                finalAnswer = "**Phụng Sự Viên Ảo Trả Lời :**\n\n" + aiResponse;
-            }
+            finalAnswer = (isChinese ? "**来自虚拟志愿者的回答：**\n\n" : "**Phụng Sự Viên Ảo Trả Lời :**\n\n") + aiResponse;
         }
 
-        // Ghi log lên sheets
         logToGoogleSheets(clientIp, question, finalAnswer, dailyOrder);
         res.json({ answer: finalAnswer });
 
     } catch (error) {
-        console.error("Lỗi:", error.message);
         await sendTelegramAlert(`❌ LỖI HỆ THỐNG:\n${error.message}`);
-        res.status(503).json({ error: "Dạ hiện tại mạng của đệ đang hơi chậm, Sư huynh có thể chat @psv : [nội dung] để nhắn trực tiếp cho Ban phụng sự nhé!" });
+        res.status(503).json({ error: "Dạ hiện tại mạng của đệ đang hơi chậm..." });
     }
 });
 
+// --- API WEBHOOK: ADMIN TRẢ LỜI TỪ TELEGRAM ---
 app.post('/api/telegram-webhook', async (req, res) => {
     try {
         const { message } = req.body;
-        
-        // Nếu không có message thì bỏ qua
         if (!message) return res.sendStatus(200);
         
-        // --- TÍNH NĂNG MỚI: NHẬN LỆNH TỪ ADMIN ---
-        
-        // 1. Xử lý lệnh /start
         if (message.text && message.text.trim().toLowerCase() === '/start') {
             await axios.post(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`, {
                 chat_id: message.chat.id,
-                text: `👋 Chào Admin! Bot đang hoạt động bình thường.\n\n👉 Nhấn lệnh /baocao để xem lượng khách truy cập hôm nay nhé!`,
+                text: `👋 Chào Admin! Bot đang hoạt động bình thường.`,
                 parse_mode: 'HTML'
             });
-            return res.sendStatus(200); // Trả về thành công và kết thúc
+            return res.sendStatus(200);
         }
 
-        // 2. Nếu admin gõ lệnh /baocao trên Telegram
         if (message.text && message.text.trim().toLowerCase() === '/baocao') {
             const total = dailyUsers.size;
-            
-            // Gửi trả lại báo cáo ngay lập tức
             await axios.post(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`, {
                 chat_id: message.chat.id,
-                text: `📊 <b>BÁO CÁO TỨC THỜI</b>\nSố lượt khách truy cập hôm nay tính đến hiện tại là: <b>${total}</b> người.`,
+                text: `📊 <b>BÁO CÁO TỨC THỜI</b>\nSố khách hôm nay: <b>${total}</b> người.`,
                 parse_mode: 'HTML'
             });
-            
-            return res.sendStatus(200); // Trả về thành công và kết thúc
+            return res.sendStatus(200);
         }
 
-        // --- TÍNH NĂNG CŨ: ADMIN REPLY KHÁCH ---
         if (message.reply_to_message) {
             const replyMsg = message.reply_to_message;
             const originalMsgId = replyMsg.message_id; 
             
             let userSocketId = null;
+            let userUid = null; // BIẾN MỚI ĐỂ LƯU UID
 
+            // TÌM SOCKET ID VÀ UID TỪ BỘ NHỚ RAM
             if (pendingRequests.has(originalMsgId)) {
-                userSocketId = pendingRequests.get(originalMsgId).socketId; 
+                const reqData = pendingRequests.get(originalMsgId);
+                userSocketId = reqData.socketId; 
+                userUid = reqData.uid;
             } 
+            // TÌM BẰNG REGEX (Dự phòng nếu server khởi động lại mất RAM)
             else if (replyMsg.text || replyMsg.caption) {
                 const originalText = replyMsg.text || replyMsg.caption || "";
-                const match = originalText.match(/ID:([a-zA-Z0-9_-]+)/);
-                if (match && match[1]) {
+                // Regex quét: ID:xxx | UID:yyy
+                const match = originalText.match(/ID:([a-zA-Z0-9_-]+)(?:\s*\|\s*UID:([a-zA-Z0-9_-]+))?/);
+                if (match) {
                     userSocketId = match[1];
+                    if (match[2] && match[2] !== 'none') userUid = match[2];
                 }
+            }
+
+            // TÍNH NĂNG MỚI: KIỂM TRA ĐỊNH TUYẾN
+            // Nếu người dùng có UID và đang dùng web với Socket mới (vì F5), ghi đè Socket ID cũ!
+            if (userUid && activeUsers.has(userUid)) {
+                userSocketId = activeUsers.get(userUid);
+                console.log(`🔀 Định tuyến thông minh: Chuyển tin nhắn đến Socket mới [${userSocketId}] của UID [${userUid}]`);
             }
 
             if (userSocketId) {
                 if (message.photo) {
                      try {
                         const fileId = message.photo[message.photo.length - 1].file_id;
-                        const getFileUrl = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${fileId}`;
-                        const fileInfoRes = await axios.get(getFileUrl);
+                        const fileInfoRes = await axios.get(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getFile?file_id=${fileId}`);
                         const filePath = fileInfoRes.data.result.file_path;
-                        const downloadUrl = `https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${filePath}`;
-                        
-                        const imageRes = await axios.get(downloadUrl, { responseType: 'arraybuffer' });
+                        const imageRes = await axios.get(`https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${filePath}`, { responseType: 'arraybuffer' });
                         const base64Image = Buffer.from(imageRes.data).toString('base64');
                         const imgSrc = `data:image/jpeg;base64,${base64Image}`;
 
                         io.to(userSocketId).emit('admin_reply_image', imgSrc);
-                        if (message.caption) {
-                            io.to(userSocketId).emit('admin_reply', message.caption);
-                        }
-                    } catch (imgError) {
-                        console.error("❌ Lỗi xử lý ảnh:", imgError.message);
-                    }
+                        if (message.caption) io.to(userSocketId).emit('admin_reply', message.caption);
+                    } catch (imgError) {}
                 } else if (message.text) {
                     io.to(userSocketId).emit('admin_reply', message.text);
                 }
@@ -599,26 +462,17 @@ app.post('/api/telegram-webhook', async (req, res) => {
         }
         res.sendStatus(200);
     } catch (e) {
-        console.error("❌ Lỗi Webhook:", e);
         res.sendStatus(500);
     }
 });
 
-// --- TỰ ĐỘNG CHỐT SỐ LIỆU VÀ RESET LÚC 23:59 MỖI NGÀY ---
 cron.schedule('59 23 * * *', async () => {
     const total = dailyUsers.size;
-    
     if (total > 0) {
-        await sendTelegramAlert(`📊 <b>BÁO CÁO TỔNG KẾT CUỐI NGÀY</b>\n` +
-                                `Tổng số lượt khách truy cập hôm nay: <b>${total}</b> người.\n` +
-                                `<i>🔄 Hệ thống đã tự động làm mới bộ đếm cho ngày mai!</i>`);
+        await sendTelegramAlert(`📊 <b>BÁO CÁO TỔNG KẾT CUỐI NGÀY</b>\nTổng số khách: <b>${total}</b> người.`);
     }
-    
     dailyUsers.clear();
-}, {
-    scheduled: true,
-    timezone: "Asia/Ho_Chi_Minh" 
-});
+}, { scheduled: true, timezone: "Asia/Ho_Chi_Minh" });
 
 server.listen(PORT, () => {
     console.log(`Server Socket.io đang chạy tại http://localhost:${PORT}`);

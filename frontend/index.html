@@ -639,12 +639,19 @@
                 if (!res.ok) throw new Error("Network error");
                 let text = await res.text();
 
-                // Định dạng hiển thị đẹp mắt
+                // 1. Tạo đường kẻ ngang
                 text = text.replace(/---/g, '<hr class="gist-hr">');
+                
+                // 2. Tạo chữ in đậm
                 text = text.replace(/\*\*(.*?)\*\*/g, '<span class="gist-q">$1</span>');
-                text = text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="display: inline-block; background-color: #FFD700; color: #8B0000; padding: 5px 12px; border-radius: 20px; text-decoration: none; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); margin: 2px 0;">Liên Kết</a>');
+                
+                // 3. BIẾN LINK THÀNH NÚT BẤM (Đã sửa Regex để không bắt nhầm dấu phẩy)
+                text = text.replace(/(https?:\/\/[^\s,<]+)/g, '<a href="$1" target="_blank" style="display: inline-block; background-color: #FFD700; color: #8B0000; padding: 4px 12px; border-radius: 20px; text-decoration: none; font-weight: bold; font-size: 13px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); margin: 4px 4px 4px 0;">Liên Kết</a>');
+                
+                // 4. Tạo xuống dòng
                 text = text.replace(/\n/g, '<br>');
 
+                // 5. GẮN VÀO GIAO DIỆN (Lệnh này phải nằm cuối cùng)
                 newsBody.innerHTML = text;
 
                 // Hiện Popup lên màn hình
@@ -652,9 +659,6 @@
                     newsOverlay.classList.add('show');
                     setTimeout(() => { newsProgress.style.width = '0%'; }, 50);
                 });
-              
-                // Kích hoạt thanh chạy thời gian 5s
-                setTimeout(() => { newsProgress.style.width = '0%'; }, 50);
 
                 // Tự đóng sau 5 giây
                 autoCloseTimer = setTimeout(() => {

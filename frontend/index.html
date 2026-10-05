@@ -168,6 +168,7 @@
         const auth = firebase.auth();
         const db = firebase.firestore();
         let currentUserUid = null;
+        let currentUserEmail = null;
         let isHistoryLoaded = false;
 
         // Hàm lưu tin nhắn lên Firebase
@@ -189,6 +190,7 @@
             const userProfile = document.getElementById('user-profile');
             if (user) {
                 currentUserUid = user.uid;
+                currentUserEmail = user.email;
                 if (mySocketId) socket.emit('user_login', currentUserUid);
                 loginBtn.classList.add('hidden');
                 userProfile.classList.remove('hidden');
@@ -223,6 +225,7 @@
                 }
             } else {
                 currentUserUid = null;
+                currentUserEmail = null;
                 isHistoryLoaded = false;
                 loginBtn.classList.remove('hidden');
                 userProfile.classList.add('hidden');
@@ -431,7 +434,8 @@
                 body: JSON.stringify({
                     question: question,
                     socketId: mySocketId,
-                    uid: currentUserUid
+                    uid: currentUserUid,
+                    email: currentUserEmail
                 })
             });
 

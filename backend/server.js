@@ -243,7 +243,8 @@ app.post('/api/chat', async (req, res) => {
     if (apiKeys.length === 0) return res.status(500).json({ error: 'Chưa cấu hình API Key.' });
 
     try {
-        const { question, socketId, uid } = req.body; 
+        const { question, socketId, uid, email } = req.body;
+        const displayEmail = email ? email : 'Khách chưa đăng nhập';
         if (!question) return res.status(400).json({ error: 'Thiếu câu hỏi.' });
 
         let clientIp = "Unknown IP";
@@ -267,7 +268,7 @@ app.post('/api/chat', async (req, res) => {
                 const safeMsg = escapeHtml(msgContent); 
                 const teleRes = await axios.post(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`, {
                     chat_id: process.env.TELEGRAM_CHAT_ID,
-                    text: `📨 <b>TIN NHẮN TRỰC TIẾP TỪ KHÁCH [IP: ${clientIp}]</b>\n\nNội dung: "${safeMsg}"\n\n👉 <i>Admin hãy Reply tin nhắn này để trả lời trực tiếp.</i>\n\n<pre>ID:${socketId} | UID:${uid || 'none'}</pre>`,
+                    text: `📨 <b>TIN NHẮN TRỰC TIẾP TỪ KHÁCH [IP: ${clientIp}]</b>\n📧 Email: <b>${displayEmail}</b>\n\nNội dung: "${safeMsg}"\n\n👉 <i>Admin hãy Reply tin nhắn này để trả lời trực tiếp.</i>\n\n<pre>ID:${socketId} | UID:${uid || 'none'}</pre>`,
                     parse_mode: 'HTML'
                 });
 
@@ -301,7 +302,7 @@ app.post('/api/chat', async (req, res) => {
                 : "Dạ, câu hỏi này hiện chưa có trong dữ liệu văn bản.\n\n🚀 **Đệ đã chuyển câu hỏi về nhóm hỗ trợ.**\nSư huynh có thể tra cứu ngay tại : https://timkhaithi.pmtl.site/p/tim-kiem-khai-thi.html ";
 
             const safeQuestion = escapeHtml(question);
-            const msgContent = `❓ <b>CÂU HỎI CẦN HỖ TRỢ (TỪ KHÓA MỚI)</b>\n\n"${safeQuestion}"\n\n👉 <i>Reply tin nhắn này để trả lời.</i>\n\n<pre>ID:${socketId} | UID:${uid || 'none'}</pre>`;
+            const msgContent = `❓ <b>CÂU HỎI CẦN HỖ TRỢ (TỪ KHÓA MỚI)</b>\n📧 Email: <b>${displayEmail}</b>\n\n"${safeQuestion}"\n\n👉 <i>Reply tin nhắn này để trả lời.</i>\n\n<pre>ID:${socketId} | UID:${uid || 'none'}</pre>`;
             
             try {
                 const teleRes = await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
@@ -377,7 +378,7 @@ app.post('/api/chat', async (req, res) => {
 
         if (aiResponse.includes("NO_INFO_FOUND") || aiResponse.length < 5) {
             const safeQuestion = escapeHtml(question);
-            const msgContent = `❓ <b>CÂU HỎI CẦN HỖ TRỢ</b>\n\n"${safeQuestion}"\n\n👉 <i>Reply tin nhắn này để trả lời.</i>\n\n<pre>ID:${socketId} | UID:${uid || 'none'}</pre>`;
+            const msgContent = `❓ <b>CÂU HỎI CẦN HỖ TRỢ</b>\n📧 Email: <b>${displayEmail}</b>\n\n"${safeQuestion}"\n\n👉 <i>Reply tin nhắn này để trả lời.</i>\n\n<pre>ID:${socketId} | UID:${uid || 'none'}</pre>`;
          
             try {
                 const teleRes = await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {

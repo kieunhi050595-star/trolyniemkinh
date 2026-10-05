@@ -16,7 +16,7 @@
     <link rel="icon" href="logo.png" type="image/png">
     <meta name="description" content="Phụng Sự Viên Ảo - Trợ lý giải đáp các thắc mắc về Pháp Môn Tâm Linh.">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://phungsuvienao.pmtl.site/"> <!-- Điền link trang web của bạn -->
+    <meta property="og:url" content="https://phungsuvienao.pmtl.site/"> 
     <meta property="og:title" content="Phụng Sự Viên Ảo - Pháp Môn Tâm Linh">
     <meta property="og:description" content="Trợ lý AI hỗ trợ giải đáp các thắc mắc về Pháp Môn Tâm Linh nhanh chóng.">
     <meta property="og:image" content="https://phungsuvienao.pmtl.site/banner.jpg"> 
@@ -27,16 +27,20 @@
     <meta name="twitter:title" content="Phụng Sự Viên Ảo - Pháp Môn Tâm Linh">
     <meta name="twitter:description" content="Trợ lý AI hỗ trợ giải đáp các thắc mắc về Pháp Môn Tâm Linh nhanh chóng.">
     <meta name="twitter:image" content="https://phungsuvienao.pmtl.site/banner.jpg">
-    <!-- =========================================================================================== -->
 
     <link href="/dist/output.css" rel="stylesheet">
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    
+    <!-- THÊM THƯ VIỆN FIREBASE COMPAT (Dễ tích hợp cho HTML thuần) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Quicksand:wght@400;500;700&display=swap" rel="stylesheet">
 
     <style>
-        /* CSS tùy chỉnh */
         html, body {
             overflow: hidden; 
             font-family: 'Quicksand', sans-serif; 
@@ -56,27 +60,23 @@
             word-break: break-word; 
         }
 
-        /* CSS Link dạng nút bấm */
         .message-bubble a {
-            display: inline-block;          /* Để hiển thị dạng khối/nút */
-            background-color: #FFD700;      /* Màu nền Vàng */
-            color: #8B0000 !important;      /* Chữ màu Nâu Đỏ (Dark Red) */
-            padding: 5px 12px;              /* Khoảng cách lề trong nút */
-            border-radius: 20px;            /* Bo tròn góc nút */
+            display: inline-block;          
+            background-color: #FFD700;      
+            color: #8B0000 !important;      
+            padding: 5px 12px;              
+            border-radius: 20px;            
             text-decoration: none !important;
             font-weight: 700 !important;
-            font-size: 14px;                /* Cỡ chữ nút nhỏ gọn hơn một chút */
-            margin: 2px 0;                  /* Khoảng cách giữa các nút */
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2); /* Đổ bóng nhẹ cho đẹp */
-            transition: all 0.2s;           /* Hiệu ứng mượt khi di chuột */
+            font-size: 14px;                
+            margin: 2px 0;                  
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2); 
+            transition: all 0.2s;           
         }
 
         .message-bubble a:hover {
-             background-color: #FFC107;     /* Màu vàng đậm hơn khi di chuột */
-             transform: translateY(-1px);   /* Nút nổi lên nhẹ khi di chuột */
-             text-decoration: none !important;
-        }
-        .message-bubble a:hover {
+             background-color: #FFC107;     
+             transform: translateY(-1px);   
              text-decoration: underline !important; 
         }
 
@@ -88,7 +88,6 @@
             color: #FFD700 !important;            
         }
         
-        /* CSS MỚI CHO ẢNH */
         .chat-image {
             max-width: 100%;
             border-radius: 12px;
@@ -99,7 +98,6 @@
             cursor: pointer;
         }
 
-        /* CSS MỚI CHO VIDEO */
         .chat-video {
             max-width: 100%;
             border-radius: 12px;
@@ -108,7 +106,7 @@
             border: 1px solid rgba(0,0,0,0.1);
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
             display: block;
-            background-color: #000; /* Nền đen cho video */
+            background-color: #000; 
         }
     </style>
 </head>
@@ -116,14 +114,31 @@
 
     <div class="w-screen flex flex-col bg-white" style="height: var(--app-height, 100vh);">
         
-        <div class="text-center py-4 border-b border-stone-200 shadow-sm flex-shrink-0">
-            <!-- Bọc Logo và Tiêu đề bằng Flexbox -->
-            <div class="flex items-center justify-center gap-2 md:gap-3">
-                <img src="logo.png" alt="Logo" class="w-8 h-8 md:w-9 md:h-9 object-contain" />
-                <h1 class="font-title text-2xl md:text-3xl font-bold text-amber-800 mb-0">Phụng Sự Viên Ảo</h1>
+        <div class="py-4 border-b border-stone-200 shadow-sm flex-shrink-0 px-4">
+            <!-- Header có chứa Nút Đăng Nhập -->
+            <div class="flex items-center justify-between">
+                <!-- Khu vực Logo -->
+                <div class="flex items-center gap-2 md:gap-3">
+                    <img src="logo.png" alt="Logo" class="w-8 h-8 md:w-9 md:h-9 object-contain" />
+                    <div>
+                        <h1 class="font-title text-xl md:text-3xl font-bold text-amber-800 mb-0 leading-tight">Phụng Sự Viên Ảo</h1>
+                        <p class="text-stone-500 text-xs md:text-sm mt-0.5">Pháp Môn Tâm Linh 心靈法門</p>
+                    </div>
+                </div>
+                
+                <!-- Khu vực Đăng nhập Firebase -->
+                <div id="auth-container" class="flex items-center">
+                    <button id="login-btn" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg text-xs md:text-sm font-bold shadow transition">
+                        Đăng nhập
+                    </button>
+                    <div id="user-profile" class="hidden flex items-center gap-2">
+                        <div class="flex flex-col items-end">
+                            <button id="logout-btn" class="text-[10px] md:text-xs text-stone-500 underline hover:text-stone-800">Đăng xuất</button>
+                        </div>
+                        <img id="user-avatar" src="" alt="Avatar" class="w-8 h-8 md:w-10 md:h-10 rounded-full border border-stone-300">
+                    </div>
+                </div>
             </div>
-            
-            <p class="text-stone-500 text-sm mt-1">Pháp Môn Tâm Linh 心靈法門 (<a href="https://nhomcongtu.pmtl.site" target="_blank" class="hover:text-amber-800 transition-colors">nhomcongtu.pmtl.site</a>)</p>
         </div>
 
         <div id="chat-messages" class="flex-1 p-4 md:p-6 overflow-y-auto bg-stone-50"></div>
@@ -140,17 +155,38 @@
 
     <script>
         // ========================================================
-        // 1. KHAI BÁO CẤU HÌNH TRƯỚC (PHẢI ĐẶT TRÊN CÙNG)
+        // 0. CẤU HÌNH FIREBASE THEO MÃ BẠN CUNG CẤP
+        // ========================================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyC8A9teJ--PpCreZWRDPRE3fzYYfFztdAY",
+            authDomain: "phungsuvienao.firebaseapp.com",
+            projectId: "phungsuvienao",
+            storageBucket: "phungsuvienao.firebasestorage.app",
+            messagingSenderId: "466478674690",
+            appId: "1:466478674690:web:ea2653f10dd788951d881b"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        let currentUserUid = null;
+        let isFirstLoad = true;
+
+        // ========================================================
+        // 1. KHAI BÁO CẤU HÌNH & DOM
         // ========================================================
         const BACKEND_API_URL = "https://trolyniemkinh.onrender.com";
         
-        // DOM Elements
         const chatMessages = document.getElementById('chat-messages');
         const userInput = document.getElementById('user-input');
         const sendButton = document.getElementById('send-button');
+        
+        const loginBtn = document.getElementById('login-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const userProfile = document.getElementById('user-profile');
+        const userAvatar = document.getElementById('user-avatar');
 
         // ========================================================
-        // 2. KẾT NỐI SOCKET (Bây giờ mới được gọi vì đã có URL)
+        // 2. KẾT NỐI SOCKET
         // ========================================================
         const socket = io(BACKEND_API_URL.replace(/\/$/, "")); 
         let mySocketId = "";
@@ -160,105 +196,134 @@
             console.log("✅ Đã kết nối Socket:", mySocketId);
         });
         
-        // Lắng nghe Admin trả lời TEXT
         socket.on("admin_reply", (msg) => {
-            addMessage("**Ban Quản Trị Trả Lời:**\n\n" + msg, 'bot');
+            const fullMsg = "**Ban Quản Trị Trả Lời:**\n\n" + msg;
+            addMessage(fullMsg, 'bot', 'normal', true); // Có lưu vào db
             try { new Audio('https://www.soundjay.com/buttons/sounds/button-3.mp3').play().catch(e=>{}); } catch(e){}
         });
 
-        // Lắng nghe Admin trả lời ẢNH (Image)
         socket.on("admin_reply_image", (base64Src) => {
-            const messageWrapper = document.createElement('div');
-            messageWrapper.classList.add('message', 'mb-4', 'flex', 'w-full', 'justify-start');
-            
-            const messageBubble = document.createElement('div');
-            messageBubble.classList.add('message-bubble', 'rounded-xl', 'p-2', 'max-w-xl', 'shadow-md', 'bot-custom-theme');
-            
-            const imgElement = document.createElement('img');
-            imgElement.src = base64Src;
-            imgElement.classList.add('chat-image');
-            
-            imgElement.onclick = () => {
-                const newTab = window.open();
-                newTab.document.body.innerHTML = `<img src="${base64Src}" style="max-width:100%">`;
-            };
-
-            const title = document.createElement('p');
-            title.innerHTML = "<b>Ban Quản Trị gửi ảnh:</b>";
-            title.style.marginBottom = "5px";
-
-            messageBubble.appendChild(title);
-            messageBubble.appendChild(imgElement);
-            messageWrapper.appendChild(messageBubble);
-            
-            chatMessages.appendChild(messageWrapper);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-
-            try { new Audio('https://www.soundjay.com/buttons/sounds/button-3.mp3').play().catch(e=>{}); } catch(e){}
+            renderAdminImage(base64Src);
+            saveMessageToFirebase(base64Src, 'admin', 'image'); // Lưu ảnh base64 vào db
         });
 
         // ========================================================
-        // 3. CÁC HÀM XỬ LÝ LOGIC KHÁC
+        // 3. XỬ LÝ GIAO DIỆN & FIREBASE LOGIC
         // ========================================================
         
+        // Căn chỉnh chiều cao app cho mobile
         const setAppHeight = () => {
             document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`);
         }
         window.addEventListener('resize', setAppHeight);
         setAppHeight();
 
-        chatMessages.addEventListener('click', function(event) {
-            const linkElement = event.target.closest('a');
-            if (linkElement) {
-                event.preventDefault();
-                const url = linkElement.href;
-                if (url) window.open(url, '_blank', 'noopener,noreferrer');
+        // Xử lý đăng nhập Google
+        loginBtn.addEventListener('click', () => {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            auth.signInWithPopup(provider).catch(err => alert("Lỗi đăng nhập: " + err.message));
+        });
+
+        // Xử lý đăng xuất
+        logoutBtn.addEventListener('click', () => {
+            auth.signOut();
+        });
+
+        // Lắng nghe trạng thái đăng nhập từ Firebase
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                // Đã đăng nhập
+                currentUserUid = user.uid;
+                loginBtn.classList.add('hidden');
+                userProfile.classList.remove('hidden');
+                userAvatar.src = user.photoURL;
+
+                chatMessages.innerHTML = ''; // Xóa tin nhắn hiện tại để tải lịch sử
+                
+                try {
+                    // Tải lịch sử chat
+                    const snapshot = await db.collection('chats')
+                        .where('uid', '==', currentUserUid)
+                        .orderBy('timestamp', 'asc')
+                        .get();
+                    
+                    if (!snapshot.empty) {
+                        snapshot.forEach(doc => {
+                            const data = doc.data();
+                            if (data.msgType === 'image') {
+                                renderAdminImage(data.text);
+                            } else {
+                                addMessage(data.text, data.sender, data.cssType || 'normal', false);
+                            }
+                        });
+                        userInput.disabled = false;
+                        userInput.placeholder = "Nhập câu hỏi của Sư huynh...";
+                    } else {
+                        showDefaultGreeting();
+                    }
+                } catch (error) {
+                    console.error("Lỗi tải lịch sử:", error);
+                    showDefaultGreeting();
+                }
+            } else {
+                // Chưa đăng nhập
+                currentUserUid = null;
+                loginBtn.classList.remove('hidden');
+                userProfile.classList.add('hidden');
+                
+                chatMessages.innerHTML = '';
+                showDefaultGreeting();
             }
         });
 
-        window.addEventListener('load', async () => {
+        async function showDefaultGreeting() {
+            if(!isFirstLoad) return;
             try {
-                // Chỉ gọi API rất nhẹ để lấy phiên bản (Dòng đầu tiên)
                 const versionRes = await fetch(`${BACKEND_API_URL.replace(/\/$/, "")}/api/get-version`);
                 let firstLine = "Mới nhất";
                 if (versionRes.ok) {
                     const data = await versionRes.json();
                     firstLine = data.version;
                 }
-
-                // Hiển thị lời chào
-                addMessage(`Chào Sư huynh ! Đệ là Phụng Sự Viên Ảo của nhóm cộng tu Pháp Môn Tâm Linh 心靈法門. Sư huynh cần đệ giúp gì ạ . "${firstLine}"`, 'bot');
-                
-                userInput.disabled = false;
-                userInput.placeholder = "Nhập câu hỏi của Sư huynh...";
+                addMessage(`Chào Sư huynh ! Đệ là Phụng Sự Viên Ảo của nhóm cộng tu Pháp Môn Tâm Linh 心靈法門. Sư huynh cần đệ giúp gì ạ . "${firstLine}"`, 'bot', 'normal', false);
             } catch (error) {
-                console.error("Lỗi:", error);
-                // Vẫn cho phép nhập liệu dù không lấy được version
-                addMessage(`Đệ chào Sư huynh ạ! Hệ thống đã sẵn sàng hỗ trợ.`, 'bot');
-                userInput.disabled = false;
-                userInput.placeholder = "Nhập câu hỏi của Sư huynh...";
+                addMessage(`Đệ chào Sư huynh ạ! Hệ thống đã sẵn sàng hỗ trợ.`, 'bot', 'normal', false);
             }
-        });
+            isFirstLoad = false;
+            userInput.disabled = false;
+            userInput.placeholder = "Nhập câu hỏi của Sư huynh...";
+        }
+
+        // ========================================================
+        // 4. HÀM RENDER & LOGIC XỬ LÝ CHAT
+        // ========================================================
+
+        function saveMessageToFirebase(text, sender, msgType = 'normal', cssType = 'normal') {
+            if (!currentUserUid) return;
+            db.collection('chats').add({
+                uid: currentUserUid,
+                text: text,
+                sender: sender, // 'user', 'bot', 'admin'
+                msgType: msgType, // 'normal', 'image'
+                cssType: cssType, // 'normal', 'error', 'info'
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            }).catch(e => console.error("Lỗi lưu tin nhắn:", e));
+        }
 
         function linkifyAndSanitize(text) {
             if (typeof text !== 'string') return '';
             const sanitizerDiv = document.createElement('div');
-            sanitizerDiv.textContent = text;
+            sanizerDiv.textContent = text;
             let sanitizedText = sanitizerDiv.innerHTML;
             
-            // Xử lý in đậm và in nghiêng
             sanitizedText = sanitizedText.replace(/\*\*(.*?)\*\*/g, '<span class="font-bold">$1</span>');
             sanitizedText = sanitizedText.replace(/_(.*?)_/g, '<span class="italic">$1</span>');
             
-            // Xử lý Link, Ảnh và VIDEO
             const urlRegex = /(https?:\/\/[^\s<>"']+)/g;
             let linkifiedText = sanitizedText.replace(urlRegex, function(url) {
-                
-                // 1. Kiểm tra nếu là link ảnh
                 if (url.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i)) {
                     return `<img src="${url}" class="chat-image" alt="Hình ảnh hướng dẫn" onclick="window.open('${url}', '_blank')">`;
                 } 
-                // 2. Kiểm tra nếu là link VIDEO (Chứa chiase.pmtl.site/dl/ hoặc đuôi .mp4)
                 else if (url.includes("chiase.pmtl.site/dl/") || url.match(/\.(mp4|webm|ogg)(\?.*)?$/i)) {
                     return `
                         <video controls class="chat-video">
@@ -268,17 +333,14 @@
                         <a href="${url}" target="_blank" rel="noopener noreferrer" style="font-size: 12px; padding: 4px 10px; background-color: #8D6E63; color: white !important;">⬇️ Tải video này</a>
                     `;
                 } 
-                // 3. Nếu là link website bình thường
                 else {
                     return `<a href="${url}" target="_blank" rel="noopener noreferrer">Liên Kết</a>`;
                 }
             });
-            
-            // Xuống dòng
             return linkifiedText.replace(/\n/g, '<br>');
         }
 
-        function addMessage(message, sender, type = 'normal') {
+        function addMessage(message, sender, type = 'normal', saveToDb = false) {
             const messageWrapper = document.createElement('div');
             messageWrapper.classList.add('message', 'mb-4', 'flex', 'w-full');
             
@@ -306,11 +368,44 @@
             messageWrapper.appendChild(messageBubble);
             chatMessages.appendChild(messageWrapper);
             chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            if (saveToDb) {
+                saveMessageToFirebase(message, sender, 'normal', type);
+            }
+        }
+
+        function renderAdminImage(base64Src) {
+            const messageWrapper = document.createElement('div');
+            messageWrapper.classList.add('message', 'mb-4', 'flex', 'w-full', 'justify-start');
+            
+            const messageBubble = document.createElement('div');
+            messageBubble.classList.add('message-bubble', 'rounded-xl', 'p-2', 'max-w-xl', 'shadow-md', 'bot-custom-theme');
+            
+            const imgElement = document.createElement('img');
+            imgElement.src = base64Src;
+            imgElement.classList.add('chat-image');
+            
+            imgElement.onclick = () => {
+                const newTab = window.open();
+                newTab.document.body.innerHTML = `<img src="${base64Src}" style="max-width:100%">`;
+            };
+
+            const title = document.createElement('p');
+            title.innerHTML = "<b>Ban Quản Trị gửi ảnh:</b>";
+            title.style.marginBottom = "5px";
+
+            messageBubble.appendChild(title);
+            messageBubble.appendChild(imgElement);
+            messageWrapper.appendChild(messageBubble);
+            
+            chatMessages.appendChild(messageWrapper);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            try { new Audio('https://www.soundjay.com/buttons/sounds/button-3.mp3').play().catch(e=>{}); } catch(e){}
         }
 
         async function callBackendAPI(question) {
             const url = `${BACKEND_API_URL.replace(/\/$/, "")}/api/chat`;
-
             const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -324,7 +419,6 @@
                 let errorText = `Lỗi HTTP: ${response.status}`;
                 try {
                     const errorData = await response.json();
-                    // Thêm errorData.answer phòng trường hợp server trả nhầm
                     errorText = `Đệ xin lỗi: ${errorData.error || errorData.answer || response.statusText}`;
                 } catch (e) {
                     errorText = `Lỗi kết nối Server.`;
@@ -340,17 +434,17 @@
             const userQuestion = userInput.value.trim();
             if (!userQuestion) return;
             
-            addMessage(userQuestion, 'user');
+            addMessage(userQuestion, 'user', 'normal', true); // Lưu tin nhắn User
             userInput.value = '';
             sendButton.disabled = true;
             sendButton.innerHTML = '<div class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>';
 
             try {
                 const answer = await callBackendAPI(userQuestion); 
-                addMessage(answer, 'bot');
+                addMessage(answer, 'bot', 'normal', true); // Lưu tin nhắn Bot
             } catch (error) {
                 console.error("Lỗi:", error);
-                addMessage(error.message, 'bot', 'error');
+                addMessage(error.message, 'bot', 'error', true);
             } finally {
                 sendButton.disabled = false;
                 sendButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"></path><path d="M22 2L15 22l-4-9-9-4 22-2z"></path></svg>';
@@ -367,6 +461,16 @@
         });
         userInput.addEventListener('input', () => { 
             sendButton.disabled = userInput.value.trim().length === 0; 
+        });
+
+        // Bắt sự kiện click vào link
+        chatMessages.addEventListener('click', function(event) {
+            const linkElement = event.target.closest('a');
+            if (linkElement) {
+                event.preventDefault();
+                const url = linkElement.href;
+                if (url) window.open(url, '_blank', 'noopener,noreferrer');
+            }
         });
     </script>
 </body>

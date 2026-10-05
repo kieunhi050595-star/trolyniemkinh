@@ -116,36 +116,130 @@
             display: block;
             background-color: #000; 
         }
+
+        /* ========================================== */
+        /* CSS CHO POPUP BẢNG TIN                     */
+        /* ========================================== */
+        #news-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0, 0, 0, 0.6);
+            z-index: 99999; /* Đảm bảo nổi lên trên cùng màn hình */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            backdrop-filter: blur(3px);
+            transition: all 0.3s ease;
+        }
+        #news-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        #news-content-box {
+            background-color: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.3);
+            width: 92%;
+            max-width: 600px;
+            max-height: 80vh; /* Tối đa 80% chiều cao màn hình */
+            display: flex;
+            flex-direction: column;
+            transform: scale(0.95);
+            transition: transform 0.3s ease;
+            overflow: hidden; /* Cắt góc ôm trọn thanh thời gian */
+        }
+        #news-overlay.show #news-content-box {
+            transform: scale(1);
+        }
+        .news-header {
+            padding: 14px 16px;
+            background-color: #fffbeb;
+            border-bottom: 1px solid #fde68a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .news-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 18px;
+            font-weight: bold;
+            color: #92400e;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .news-close-btn {
+            background: none;
+            border: none;
+            color: #a8a29e;
+            cursor: pointer;
+            padding: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
+        }
+        .news-close-btn:hover { color: #ef4444; }
+        
+        #news-body {
+            padding: 16px 20px;
+            overflow-y: auto;
+            color: #44403c;
+            font-size: 15px;
+            line-height: 1.7;
+        }
+        /* Thanh cuộn mượt mà */
+        #news-body::-webkit-scrollbar { width: 6px; }
+        #news-body::-webkit-scrollbar-track { background: transparent; }
+        #news-body::-webkit-scrollbar-thumb { background: #d6d3d1; border-radius: 10px; }
+        #news-body::-webkit-scrollbar-thumb:hover { background: #a8a29e; }
+        
+        /* Thanh đếm thời gian */
+        .news-progress-bar {
+            width: 100%;
+            height: 4px;
+            background-color: #e7e5e4;
+        }
+        #news-progress {
+            height: 100%;
+            background-color: #f59e0b;
+            width: 100%;
+            transition: width 5s linear, opacity 0.3s ease;
+        }
+        
+        /* Định dạng chữ Gist cho đẹp */
+        .gist-q { color: #92400e; font-weight: bold; font-size: 16px; display: block; margin-top: 14px; }
+        .gist-hr { border: none; border-top: 1px dashed #fcd34d; margin: 18px 0; }
     </style>
 </head>
 <body class="bg-stone-100 text-stone-800">
     <!-- ========================================== -->
-    <!-- BẢNG TIN POPUP (MỚI THÊM)                  -->
+    <!-- BẢNG TIN POPUP (CẬP NHẬT CSS THUẦN)        -->
     <!-- ========================================== -->
-    <div id="news-overlay" class="fixed inset-0 bg-black/60 z-[100] hidden flex items-center justify-center transition-opacity duration-300 opacity-0 backdrop-blur-sm">
-        <div id="news-content-box" class="bg-white rounded-xl shadow-2xl w-11/12 md:w-2/3 max-w-2xl flex flex-col relative transform scale-95 transition-transform duration-300 max-h-[80vh]">
-            
+    <div id="news-overlay">
+        <div id="news-content-box">
             <!-- Header -->
-            <div class="px-4 py-3 border-b border-amber-100 flex justify-between items-center bg-amber-50 rounded-t-xl">
-                <h2 class="font-title text-lg md:text-xl font-bold text-amber-800 flex items-center gap-2">
-                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z"></path></svg>
-                    Bảng Tin Khai Thị Mới Nhất
+            <div class="news-header">
+                <h2 class="news-title">
+                    <svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z"></path></svg>
+                    Bảng Tin Khai Thị
                 </h2>
-                <button id="close-news-btn" class="text-stone-400 hover:text-red-500 transition p-1">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                <button id="close-news-btn" class="news-close-btn">
+                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </div>
-
-            <!-- Body (Scrollable) -->
-            <div id="news-body" class="p-4 md:p-6 overflow-y-auto text-stone-700 text-sm md:text-base leading-relaxed">
-                <div class="flex justify-center items-center h-20">
-                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-700"></div>
-                </div>
+            
+            <!-- Body -->
+            <div id="news-body">
+                <div style="display:flex; justify-content:center; align-items:center; height:80px; color:#9ca3af;">Đang tải bảng tin...</div>
             </div>
-
-            <!-- Progress Bar Auto Close -->
-            <div class="w-full h-1 bg-stone-200 rounded-b-xl overflow-hidden">
-                <div id="news-progress" class="h-full bg-amber-500 w-full transition-all duration-[5000ms] ease-linear"></div>
+            
+            <!-- Progress Bar -->
+            <div class="news-progress-bar">
+                <div id="news-progress"></div>
             </div>
         </div>
     </div>
@@ -519,7 +613,7 @@
         });
 
         // ========================================================
-        // TÍNH NĂNG BẢNG TIN POPUP TỪ GIST GITHUB
+        // TÍNH NĂNG BẢNG TIN POPUP (CẬP NHẬT)
         // ========================================================
         const GIST_URL = "https://gist.githubusercontent.com/kieunhi050595-star/b9a97789c4426987938482ec5b0297e3/raw/";
         const newsOverlay = document.getElementById('news-overlay');
@@ -534,66 +628,54 @@
             const today = new Date().toLocaleDateString('vi-VN');
             const lastSeen = localStorage.getItem('newsPopupLastSeen');
 
-            // Nếu hôm nay đã xem rồi thì không hiện nữa
+            // Bỏ qua nếu hôm nay đã xem
             if (lastSeen === today) return;
 
-            // Hiển thị Popup
-            newsOverlay.classList.remove('hidden');
-            setTimeout(() => {
-                newsOverlay.classList.remove('opacity-0');
-                newsContentBox.classList.remove('scale-95');
-                newsContentBox.classList.add('scale-100');
-            }, 10);
-
             try {
-                // Tải dữ liệu từ Gist (kèm tham số chống cache)
+                // Tải dữ liệu từ Gist
                 const res = await fetch(`${GIST_URL}?t=${Date.now()}`);
                 if (!res.ok) throw new Error("Network error");
                 let text = await res.text();
 
-                // Định dạng văn bản (In đậm, xuống dòng, thẻ HR)
-                text = text.replace(/---/g, '<hr class="my-5 border-amber-200">');
-                text = text.replace(/\*\*(.*?)\*\*/g, '<strong class="text-amber-900 text-lg block mt-3 mb-1">$1</strong>');
+                // Định dạng hiển thị đẹp mắt
+                text = text.replace(/---/g, '<hr class="gist-hr">');
+                text = text.replace(/\*\*(.*?)\*\*/g, '<span class="gist-q">$1</span>');
                 text = text.replace(/\n/g, '<br>');
 
                 newsBody.innerHTML = text;
 
+                // Hiện Popup lên màn hình
+                newsOverlay.classList.add('show');
+
                 // Kích hoạt thanh chạy thời gian 5s
                 setTimeout(() => { newsProgress.style.width = '0%'; }, 50);
 
-                // Hẹn giờ tự đóng sau 5 giây
+                // Tự đóng sau 5 giây
                 autoCloseTimer = setTimeout(() => {
                     closeNewsPopup();
                 }, 5000);
 
             } catch (error) {
-                newsBody.innerHTML = "<p class='text-center text-red-500'>Không thể tải bảng tin lúc này.</p>";
+                console.error("Lỗi tải bảng tin:", error);
             }
         }
 
         function closeNewsPopup() {
             clearTimeout(autoCloseTimer);
-            newsOverlay.classList.add('opacity-0');
-            newsContentBox.classList.remove('scale-100');
-            newsContentBox.classList.add('scale-95');
-            setTimeout(() => {
-                newsOverlay.classList.add('hidden');
-            }, 300);
+            newsOverlay.classList.remove('show');
             
-            // Đánh dấu hôm nay đã xem
+            // Đánh dấu hôm nay đã xem để không quấy rầy khách
             const today = new Date().toLocaleDateString('vi-VN');
             localStorage.setItem('newsPopupLastSeen', today);
         }
 
-        // Hủy tự đóng nếu người dùng chạm/di chuột vào để đọc
-        newsContentBox.addEventListener('mouseenter', () => {
+        // Hủy tự đóng nếu khách chạm tay/di chuột vào để cuộn đọc
+        function cancelAutoClose() {
             clearTimeout(autoCloseTimer);
-            newsProgress.style.display = 'none'; // Ẩn thanh thời gian đi
-        });
-        newsContentBox.addEventListener('touchstart', () => {
-            clearTimeout(autoCloseTimer);
-            newsProgress.style.display = 'none';
-        });
+            newsProgress.style.opacity = '0'; // Làm mờ thanh thời gian
+        }
+        newsContentBox.addEventListener('mouseenter', cancelAutoClose);
+        newsContentBox.addEventListener('touchstart', cancelAutoClose);
 
         // Đóng khi bấm nút X hoặc bấm ra ngoài nền đen
         closeNewsBtn.addEventListener('click', closeNewsPopup);
@@ -601,7 +683,7 @@
             if (e.target === newsOverlay) closeNewsPopup();
         });
 
-        // Kích hoạt kiểm tra và hiển thị Popup sau khi trang load xong 1 giây
+        // Kích hoạt sau khi trang tải xong 1 giây
         setTimeout(fetchAndShowNews, 1000);
     </script>
 </body>

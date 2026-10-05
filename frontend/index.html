@@ -642,6 +642,7 @@
                 // Định dạng hiển thị đẹp mắt
                 text = text.replace(/---/g, '<hr class="gist-hr">');
                 text = text.replace(/\*\*(.*?)\*\*/g, '<span class="gist-q">$1</span>');
+                text = text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="display: inline-block; background-color: #FFD700; color: #8B0000; padding: 5px 12px; border-radius: 20px; text-decoration: none; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); margin: 2px 0;">Liên Kết</a>');
                 text = text.replace(/\n/g, '<br>');
 
                 newsBody.innerHTML = text;

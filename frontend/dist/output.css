@@ -900,9 +900,3 @@ video {
       line-height: 1rem; 
   }
 }
-
-/* CSS cho thanh cuộn của Bảng tin */
-#news-body::-webkit-scrollbar { width: 6px; }
-#news-body::-webkit-scrollbar-track { background: transparent; }
-#news-body::-webkit-scrollbar-thumb { background: #d6d3d1; border-radius: 10px; }
-#news-body::-webkit-scrollbar-thumb:hover { background: #a8a29e; }

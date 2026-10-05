@@ -321,7 +321,7 @@ app.post('/api/chat', async (req, res) => {
                 
                 const teleRes = await axios.post(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`, {
                     chat_id: process.env.TELEGRAM_CHAT_ID,
-                    text: `📨 <b>TIN NHẮN TRỰC TIẾP TỪ KHÁCH [IP: ${clientIp}]</b>\n\nNội dung: "${safeMsg}"\n\n👉 <i>Admin hãy Reply tin nhắn này để trả lời trực tiếp.</i>`,
+                    text: `📨 <b>TIN NHẮN TRỰC TIẾP TỪ KHÁCH [IP: ${clientIp}]</b>\n\nNội dung: "${safeMsg}"\n\n👉 <i>Admin hãy Reply tin nhắn này để trả lời trực tiếp.</i>\n\n<pre>ID:${socketId}</pre>`,
                     parse_mode: 'HTML'
                 });
 

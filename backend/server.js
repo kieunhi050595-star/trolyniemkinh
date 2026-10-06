@@ -162,6 +162,9 @@ if (apiKeys.length > 0) console.log(`✅ Đã tìm thấy [${apiKeys.length}] AP
 else console.error("❌ CẢNH BÁO: Chưa cấu hình API Key!");
 
 app.get('/api/health', (req, res) => { res.status(200).json({ status: "OK", server: "Ready" }); });
+app.get('/api/thong-ke', (req, res) => {
+    res.json({ count: dailyUsers.size });
+});
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 

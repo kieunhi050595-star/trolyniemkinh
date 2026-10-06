@@ -366,6 +366,14 @@
     </div>
     <div class="w-screen flex flex-col bg-white" style="height: var(--app-height, 100vh);">
         <div class="text-center py-4 border-b border-stone-200 shadow-sm flex-shrink-0 relative">
+            <div id="visitor-counter" class="absolute top-2 left-2 md:top-3 md:left-4 flex items-center gap-2 bg-stone-50 border border-stone-200 px-2 py-1 md:px-3 md:py-1.5 rounded-full shadow-sm" title="Số lượt truy cập hôm nay">
+                <span class="relative flex h-2.5 w-2.5 md:h-3 md:w-3">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-2.5 w-2.5 md:h-3 md:w-3 bg-green-500"></span>
+                </span>
+                <span id="visitor-count-text" class="text-[10px] md:text-xs font-bold text-stone-600 font-title">--</span>
+            </div>
+            <!-- ========================================== -->
             <div class="flex items-center justify-center gap-2 md:gap-3">
                 <img src="logo.png" alt="Logo" class="w-8 h-8 md:w-9 md:h-9 object-contain" />
                 <h1 class="font-title text-2xl md:text-3xl font-bold text-amber-800 mb-0">Phụng Sự Viên Ảo</h1>
@@ -621,6 +629,34 @@
             }
         });
 
+		// ========================================================
+        // TẢI SỐ LƯỢNG NGƯỜI TRUY CẬP TRONG NGÀY
+        // ========================================================
+        async function fetchVisitorCount() {
+            try {
+                // LƯU Ý: Bạn hãy thay đổi "/api/thong-ke" thành đúng đường dẫn API trên Backend của bạn
+                const url = `${BACKEND_API_URL.replace(/\/$/, "")}/api/thong-ke`; 
+                const response = await fetch(url);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Giả sử backend trả về JSON có dạng { "count": 150 }
+                    // Hãy thay "data.count" thành đúng tên biến mà Backend bạn trả về nhé
+                    const todayVisitors = data.count || data.total || data.visitors || 0; 
+                    
+                    document.getElementById('visitor-count-text').innerText = todayVisitors;
+                }
+            } catch (error) {
+                console.log("Chưa thể tải số lượng khách:", error);
+                // Nếu lỗi, ẩn số đi cho giao diện gọn gàng
+                document.getElementById('visitor-count-text').innerText = "...";
+            }
+        }
+
+        // Gọi hàm sau khi web load 2 giây để tránh kẹt mạng cùng Firebase
+        setTimeout(fetchVisitorCount, 2000);
+		
         function linkifyAndSanitize(text) {
             if (typeof text !== 'string') return '';
             const sanitizerDiv = document.createElement('div');

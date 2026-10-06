@@ -317,6 +317,9 @@
     <!-- ========================================== -->
     <!-- BẢNG TIN POPUP (CẬP NHẬT CSS THUẦN)        -->
     <!-- ========================================== -->
+    <!-- ========================================== -->
+    <!-- BẢNG TIN POPUP (CÓ NÚT ĐÓNG PHÍA DƯỚI)     -->
+    <!-- ========================================== -->
     <div id="news-overlay">
         <div id="news-content-box">
             <!-- Header -->
@@ -334,9 +337,15 @@
             <div id="news-body">
                 <div style="display:flex; justify-content:center; align-items:center; height:80px; color:#9ca3af;">Đang tải bảng tin...</div>
             </div>
+            
+            <!-- Footer (Nút đóng phía dưới) -->
+            <div style="padding: 12px 16px; border-top: 1px solid #fde68a; background-color: #fffbeb; display: flex; justify-content: center;">
+                <button id="close-news-btn-bottom" style="padding: 8px 30px; border-radius: 20px; font-weight: bold; font-size: 14px; color: #fff; background-color: #d97706; border: none; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: 0.2s;">
+                    Đóng bảng tin
+                </button>
+            </div>
         </div>
     </div>
-    <!-- ========================================== -->
     <!-- ========================================== -->
     <!-- BẢNG HỎI XÁC NHẬN XÓA (MỚI)                -->
     <!-- ========================================== -->
@@ -799,34 +808,30 @@
         });
 
         // ========================================================
-        // TÍNH NĂNG BẢNG TIN POPUP (ĐÃ TẮT TỰ ĐÓNG)
+        // TÍNH NĂNG BẢNG TIN POPUP (SỬA LỖI ĐÓNG & THÊM NÚT)
         // ========================================================
         const GIST_URL = "https://gist.githubusercontent.com/kieunhi050595-star/b9a97789c4426987938482ec5b0297e3/raw/";
         const newsOverlay = document.getElementById('news-overlay');
-        const newsContentBox = document.getElementById('news-content-box');
         const newsBody = document.getElementById('news-body');
-        const closeNewsBtn = document.getElementById('close-news-btn');
+        const closeNewsBtn = document.getElementById('close-news-btn'); // Nút X ở trên
+        const closeNewsBtnBottom = document.getElementById('close-news-btn-bottom'); // Nút Đóng ở dưới
 
         async function fetchAndShowNews() {
             const today = new Date().toLocaleDateString('vi-VN');
             const lastSeen = localStorage.getItem('newsPopupLastSeen');
 
-            // Bỏ qua nếu hôm nay đã xem
             if (lastSeen === today) return;
 
             try {
-                // Tải dữ liệu từ Gist
                 const res = await fetch(`${GIST_URL}?t=${Date.now()}`);
                 if (!res.ok) throw new Error("Network error");
                 let text = await res.text();
 
-                // 1. Tạo đường kẻ ngang
+                // 1. Kẻ ngang & In đậm
                 text = text.replace(/---/g, '<hr class="gist-hr">');
-                
-                // 2. Tạo chữ in đậm
                 text = text.replace(/\*\*(.*?)\*\*/g, '<span class="gist-q">$1</span>');
                 
-                // 3. XỬ LÝ LINK THÔNG MINH (Phân biệt Ảnh và Nút bấm)
+                // 2. Link thông minh (Ảnh & Nút bấm)
                 text = text.replace(/(https?:\/\/[^\s,<]+)/g, function(url) {
                     if (url.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i)) {
                         return `<img src="${url}" style="max-width: 100%; border-radius: 12px; margin: 10px 0; border: 1px solid rgba(0,0,0,0.1); box-shadow: 0 2px 5px rgba(0,0,0,0.1);" alt="Hình ảnh bản tin">`;
@@ -835,62 +840,37 @@
                     }
                 });
                 
-                // 4. Tạo xuống dòng
+                // 3. Xuống dòng & Hiển thị
                 text = text.replace(/\n/g, '<br>');
-
-                // 5. Gắn vào giao diện
                 newsBody.innerHTML = text;
 
-                // Hiện Popup lên màn hình
                 requestAnimationFrame(() => {
                     newsOverlay.classList.add('show');
                 });
-
             } catch (error) {
                 console.error("Lỗi tải bảng tin:", error);
             }
         }
 
+        // HÀM ĐÓNG POPUP
         function closeNewsPopup() {
             newsOverlay.classList.remove('show');
-            
-            // Đánh dấu hôm nay đã xem
             const today = new Date().toLocaleDateString('vi-VN');
             localStorage.setItem('newsPopupLastSeen', today);
         }
 
-        // Đóng khi bấm nút X hoặc bấm ra ngoài nền đen
-        closeNewsBtn.addEventListener('click', closeNewsPopup);
+        // GẮN SỰ KIỆN ĐÓNG CHO CẢ 3 NƠI (Nút X, Nút dưới, và Nền đen)
+        if (closeNewsBtn) closeNewsBtn.addEventListener('click', closeNewsPopup);
+        if (closeNewsBtnBottom) closeNewsBtnBottom.addEventListener('click', closeNewsPopup);
+        
         newsOverlay.addEventListener('click', (e) => {
-            if (e.target === newsOverlay) closeNewsPopup();
+            // Chỉ đóng nếu click vào nền đen, không đóng nếu click nhầm vào nội dung chữ
+            if (e.target === newsOverlay) {
+                closeNewsPopup();
+            }
         });
 
-        // Kích hoạt sau khi trang tải xong 3.5 giây
-        setTimeout(fetchAndShowNews, 3500);
-
-        function closeNewsPopup() {
-            clearTimeout(autoCloseTimer);
-            newsOverlay.classList.remove('show');
-            
-            // Đánh dấu hôm nay đã xem để không quấy rầy khách
-            const today = new Date().toLocaleDateString('vi-VN');
-            localStorage.setItem('newsPopupLastSeen', today);
-        }
-
-        // Hủy tự đóng nếu khách chạm tay/di chuột vào để cuộn đọc
-        function cancelAutoClose() {
-            clearTimeout(autoCloseTimer);
-            newsProgress.style.opacity = '0'; // Làm mờ thanh thời gian
-        }
-        newsContentBox.addEventListener('mouseenter', cancelAutoClose);
-        newsContentBox.addEventListener('touchstart', cancelAutoClose);
-
-        // Đóng khi bấm nút X hoặc bấm ra ngoài nền đen
-        closeNewsBtn.addEventListener('click', closeNewsPopup);
-        newsOverlay.addEventListener('click', (e) => {
-            if (e.target === newsOverlay) closeNewsPopup();
-        });
-        // Kích hoạt sau khi trang tải xong 1 giây
+        // Hiện popup sau 3.5 giây
         setTimeout(fetchAndShowNews, 3500);
     </script>
 </body>

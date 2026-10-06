@@ -835,8 +835,17 @@
                 text = text.replace(/\*\*(.*?)\*\*/g, '<span class="gist-q">$1</span>');
                 
                 // 3. BIẾN LINK THÀNH NÚT BẤM (Đã sửa Regex để không bắt nhầm dấu phẩy)
-                text = text.replace(/(https?:\/\/[^\s,<]+)/g, '<a href="$1" target="_blank" style="display: inline-block; background-color: #FFD700; color: #8B0000; padding: 4px 12px; border-radius: 20px; text-decoration: none; font-weight: bold; font-size: 13px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); margin: 4px 4px 4px 0;">Liên Kết</a>');
-                
+				// 3. XỬ LÝ LINK THÔNG MINH (Phân biệt Link Web và Link Ảnh)
+                text = text.replace(/(https?:\/\/[^\s,<]+)/g, function(url) {
+                    // Nếu đuôi là file ảnh
+                    if (url.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i)) {
+                        return `<img src="${url}" style="max-width: 100%; border-radius: 12px; margin: 10px 0; border: 1px solid rgba(0,0,0,0.1); box-shadow: 0 2px 5px rgba(0,0,0,0.1);" alt="Hình ảnh bản tin">`;
+                    } 
+                    // Nếu là link web bình thường
+                    else {
+                        return `<a href="${url}" target="_blank" style="display: inline-block; background-color: #FFD700; color: #8B0000; padding: 4px 12px; border-radius: 20px; text-decoration: none; font-weight: bold; font-size: 13px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); margin: 4px 4px 4px 0;">Liên Kết</a>`;
+                    }
+                });                
                 // 4. Tạo xuống dòng
                 text = text.replace(/\n/g, '<br>');
 

@@ -311,6 +311,40 @@
         @media (hover: none) {
             .delete-msg-btn { opacity: 0.8; } /* Trên điện thoại luôn hiện mờ mờ */
         }
+
+		/* ========================================== */
+        /* CSS CHẤM XANH NHẤP NHÁY BỘ ĐẾM KHÁCH       */
+        /* ========================================== */
+        .online-indicator {
+            position: relative;
+            display: flex;
+            width: 10px;
+            height: 10px;
+        }
+        .online-indicator-ping {
+            position: absolute;
+            display: inline-flex;
+            height: 100%;
+            width: 100%;
+            border-radius: 50%;
+            background-color: #4ade80; /* Màu xanh lá sáng */
+            opacity: 0.75;
+            animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+        }
+        .online-indicator-core {
+            position: relative;
+            display: inline-flex;
+            border-radius: 50%;
+            height: 10px;
+            width: 10px;
+            background-color: #22c55e; /* Màu xanh lá đậm */
+        }
+        @keyframes ping {
+            75%, 100% {
+                transform: scale(2.5);
+                opacity: 0;
+            }
+        }
     </style>
 </head>
 <body class="bg-stone-100 text-stone-800">
@@ -367,10 +401,12 @@
     <div class="w-screen flex flex-col bg-white" style="height: var(--app-height, 100vh);">
         <div class="text-center py-4 border-b border-stone-200 shadow-sm flex-shrink-0 relative">
             <div id="visitor-counter" class="absolute top-2 left-2 md:top-3 md:left-4 flex items-center gap-2 bg-stone-50 border border-stone-200 px-2 py-1 md:px-3 md:py-1.5 rounded-full shadow-sm" title="Số lượt truy cập hôm nay">
-                <span class="relative flex h-2.5 w-2.5 md:h-3 md:w-3">
-                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span class="relative inline-flex rounded-full h-2.5 w-2.5 md:h-3 md:w-3 bg-green-500"></span>
+                <!-- Chấm xanh nhấp nháy CSS thuần -->
+                <span class="online-indicator">
+                  <span class="online-indicator-ping"></span>
+                  <span class="online-indicator-core"></span>
                 </span>
+                <!-- Số lượng -->
                 <span id="visitor-count-text" class="text-[10px] md:text-xs font-bold text-stone-600 font-title">--</span>
             </div>
             <!-- ========================================== -->

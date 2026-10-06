@@ -334,11 +334,6 @@
             <div id="news-body">
                 <div style="display:flex; justify-content:center; align-items:center; height:80px; color:#9ca3af;">Đang tải bảng tin...</div>
             </div>
-            
-            <!-- Progress Bar -->
-            <div class="news-progress-bar">
-                <div id="news-progress"></div>
-            </div>
         </div>
     </div>
     <!-- ========================================== -->
@@ -804,16 +799,13 @@
         });
 
         // ========================================================
-        // TÍNH NĂNG BẢNG TIN POPUP (CẬP NHẬT)
+        // TÍNH NĂNG BẢNG TIN POPUP (ĐÃ TẮT TỰ ĐÓNG)
         // ========================================================
         const GIST_URL = "https://gist.githubusercontent.com/kieunhi050595-star/b9a97789c4426987938482ec5b0297e3/raw/";
         const newsOverlay = document.getElementById('news-overlay');
         const newsContentBox = document.getElementById('news-content-box');
         const newsBody = document.getElementById('news-body');
         const closeNewsBtn = document.getElementById('close-news-btn');
-        const newsProgress = document.getElementById('news-progress');
-        
-        let autoCloseTimer;
 
         async function fetchAndShowNews() {
             const today = new Date().toLocaleDateString('vi-VN');
@@ -834,39 +826,47 @@
                 // 2. Tạo chữ in đậm
                 text = text.replace(/\*\*(.*?)\*\*/g, '<span class="gist-q">$1</span>');
                 
-                // 3. BIẾN LINK THÀNH NÚT BẤM (Đã sửa Regex để không bắt nhầm dấu phẩy)
-				// 3. XỬ LÝ LINK THÔNG MINH (Phân biệt Link Web và Link Ảnh)
+                // 3. XỬ LÝ LINK THÔNG MINH (Phân biệt Ảnh và Nút bấm)
                 text = text.replace(/(https?:\/\/[^\s,<]+)/g, function(url) {
-                    // Nếu đuôi là file ảnh
                     if (url.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i)) {
                         return `<img src="${url}" style="max-width: 100%; border-radius: 12px; margin: 10px 0; border: 1px solid rgba(0,0,0,0.1); box-shadow: 0 2px 5px rgba(0,0,0,0.1);" alt="Hình ảnh bản tin">`;
-                    } 
-                    // Nếu là link web bình thường
-                    else {
+                    } else {
                         return `<a href="${url}" target="_blank" style="display: inline-block; background-color: #FFD700; color: #8B0000; padding: 4px 12px; border-radius: 20px; text-decoration: none; font-weight: bold; font-size: 13px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); margin: 4px 4px 4px 0;">Liên Kết</a>`;
                     }
-                });                
+                });
+                
                 // 4. Tạo xuống dòng
                 text = text.replace(/\n/g, '<br>');
 
-                // 5. GẮN VÀO GIAO DIỆN (Lệnh này phải nằm cuối cùng)
+                // 5. Gắn vào giao diện
                 newsBody.innerHTML = text;
 
                 // Hiện Popup lên màn hình
                 requestAnimationFrame(() => {
                     newsOverlay.classList.add('show');
-                    setTimeout(() => { newsProgress.style.width = '0%'; }, 50);
                 });
-
-                // Tự đóng sau 5 giây
-                autoCloseTimer = setTimeout(() => {
-                    closeNewsPopup();
-                }, 5000);
 
             } catch (error) {
                 console.error("Lỗi tải bảng tin:", error);
             }
         }
+
+        function closeNewsPopup() {
+            newsOverlay.classList.remove('show');
+            
+            // Đánh dấu hôm nay đã xem
+            const today = new Date().toLocaleDateString('vi-VN');
+            localStorage.setItem('newsPopupLastSeen', today);
+        }
+
+        // Đóng khi bấm nút X hoặc bấm ra ngoài nền đen
+        closeNewsBtn.addEventListener('click', closeNewsPopup);
+        newsOverlay.addEventListener('click', (e) => {
+            if (e.target === newsOverlay) closeNewsPopup();
+        });
+
+        // Kích hoạt sau khi trang tải xong 3.5 giây
+        setTimeout(fetchAndShowNews, 3500);
 
         function closeNewsPopup() {
             clearTimeout(autoCloseTimer);

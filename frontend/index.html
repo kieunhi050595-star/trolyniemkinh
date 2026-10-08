@@ -897,10 +897,19 @@
         const GIST_URL = "https://gist.githubusercontent.com/kieunhi050595-star/b9a97789c4426987938482ec5b0297e3/raw/";
         const newsOverlay = document.getElementById('news-overlay');
         const newsBody = document.getElementById('news-body');
-        const closeNewsBtn = document.getElementById('close-news-btn'); // Nút X ở trên
-        const closeNewsBtnBottom = document.getElementById('close-news-btn-bottom'); // Nút Đóng ở dưới
+        const closeNewsBtn = document.getElementById('close-news-btn'); 
+        const closeNewsBtnBottom = document.getElementById('close-news-btn-bottom'); 
+
+		let isPopupEnabledByAdmin = true;
+        socket.on('popup_status', (status) => {
+            isPopupEnabledByAdmin = status;
+            if (!status) {
+                closeNewsPopup(); // Nếu admin vừa nhắn /popup off, tự động đóng luôn popup nếu khách đang mở
+            }
+        });
 
         async function fetchAndShowNews() {
+			if (!isPopupEnabledByAdmin) return;
             const today = new Date().toLocaleDateString('vi-VN');
             const lastSeen = localStorage.getItem('newsPopupLastSeen');
 

@@ -248,11 +248,20 @@ app.post('/api/chat', async (req, res) => {
     if (apiKeys.length === 0) return res.status(500).json({ error: 'Chưa cấu hình API Key.' });
 
     try {
-        const { question, socketId, uid, email } = req.body;
-		if (!uid) {
+        const { question, socketId, uid, email, name } = req.body;
+        if (!uid) {
             return res.json({ answer: "🚫 Dạ hệ thống yêu cầu Sư huynh phải đăng nhập tài khoản Google mới có thể trò chuyện ạ!" });
         }
-        const displayEmail = email ? email : 'Khách chưa đăng nhập';
+        
+        // Cấu hình ưu tiên: Có Email hiển thị Email -> Không Email thì hiển thị Tên -> Không có gì hiển thị Ẩn danh
+        let displayEmail = "";
+        if (email) {
+            displayEmail = email;
+        } else if (name) {
+            displayEmail = `Tên: ${name} (Tài khoản ẩn Email)`;
+        } else {
+            displayEmail = 'Tài khoản ẩn thông tin';
+        }
         if (!question) return res.status(400).json({ error: 'Thiếu câu hỏi.' });
 
         let clientIp = "Unknown IP";

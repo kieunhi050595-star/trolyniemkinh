@@ -455,6 +455,18 @@
 
     <script>
         // ========================================================
+        // 1. KHAI BÁO CẤU HÌNH TRƯỚC (PHẢI ĐẶT TRÊN CÙNG)
+        // ========================================================
+        const BACKEND_API_URL = "https://trolyniemkinh.onrender.com";
+		const socket = io(BACKEND_API_URL.replace(/\/$/, "")); 
+        let mySocketId = "";
+        
+        socket.on("connect", () => {
+            mySocketId = socket.id; 
+            console.log("✅ Đã kết nối Socket:", mySocketId);
+        });
+
+		// ========================================================
         // 0. CẤU HÌNH FIREBASE
         // ========================================================
         const firebaseConfig = {
@@ -557,38 +569,12 @@
             auth.signOut();
             window.location.reload(); 
         });
-
-        document.getElementById('login-btn').addEventListener('click', () => {
-            const provider = new firebase.auth.GoogleAuthProvider();
-            auth.signInWithPopup(provider).catch(err => alert("Lỗi đăng nhập: " + err.message));
-        });
-
-        document.getElementById('logout-btn').addEventListener('click', () => {
-            auth.signOut();
-            window.location.reload(); // Tải lại trang khi đăng xuất để xóa sạch lịch sử trên màn hình
-        });
-
-        // ========================================================
-        // 1. KHAI BÁO CẤU HÌNH TRƯỚC (PHẢI ĐẶT TRÊN CÙNG)
-        // ========================================================
-        const BACKEND_API_URL = "https://trolyniemkinh.onrender.com";
-        
+	
         // DOM Elements
         const chatMessages = document.getElementById('chat-messages');
         const userInput = document.getElementById('user-input');
         const sendButton = document.getElementById('send-button');
-
-        // ========================================================
-        // 2. KẾT NỐI SOCKET (Bây giờ mới được gọi vì đã có URL)
-        // ========================================================
-        const socket = io(BACKEND_API_URL.replace(/\/$/, "")); 
-        let mySocketId = "";
-        
-        socket.on("connect", () => {
-            mySocketId = socket.id; 
-            console.log("✅ Đã kết nối Socket:", mySocketId);
-        });
-        
+       
         // Lắng nghe Admin trả lời TEXT
         socket.on("admin_reply", (msg) => {
             const fullMsg = "**Ban Quản Trị Trả Lời:**\n\n" + msg;

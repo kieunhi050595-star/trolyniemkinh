@@ -444,7 +444,7 @@ app.post('/api/telegram-webhook', async (req, res) => {
 
 		if (message.text) {
             const textCmd = message.text.trim().toLowerCase();
-            if (textCmd === '/popup-off') {
+            if (textCmd === '/popupoff') {
                 isPopupEnabled = false;
                 io.emit('popup_status', false); // Lập tức ra lệnh tắt trên toàn bộ web khách
                 await axios.post(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`, {
@@ -454,7 +454,7 @@ app.post('/api/telegram-webhook', async (req, res) => {
                 });
                 return res.sendStatus(200);
             }
-            if (textCmd === '/popup-on') {
+            if (textCmd === '/popupon') {
                 isPopupEnabled = true;
                 io.emit('popup_status', true); // Lập tức ra lệnh bật trên toàn bộ web khách
                 await axios.post(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`, {

@@ -247,6 +247,9 @@ app.post('/api/chat', async (req, res) => {
 
     try {
         const { question, socketId, uid, email } = req.body;
+		if (!uid) {
+            return res.json({ answer: "🚫 Dạ hệ thống yêu cầu Sư huynh phải đăng nhập tài khoản Google mới có thể trò chuyện ạ!" });
+        }
         const displayEmail = email ? email : 'Khách chưa đăng nhập';
         if (!question) return res.status(400).json({ error: 'Thiếu câu hỏi.' });
 

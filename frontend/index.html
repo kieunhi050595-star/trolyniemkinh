@@ -534,6 +534,7 @@
         const db = firebase.firestore();
         let currentUserUid = null;
         let currentUserEmail = null;
+		let currentUserName = null;
         let isHistoryLoaded = false;
 
         // Hàm lưu tin nhắn lên Firebase (CẬP NHẬT)
@@ -563,6 +564,7 @@
             if (user) {
                 currentUserUid = user.uid;
                 currentUserEmail = user.email;
+				currentUserName = user.displayName;
                 if (mySocketId) socket.emit('user_login', currentUserUid);
                 
                 // ẨN MÀN HÌNH ĐĂNG NHẬP (Vào app)
@@ -854,7 +856,8 @@
                     question: question,
                     socketId: mySocketId,
                     uid: currentUserUid,
-                    email: currentUserEmail
+                    email: currentUserEmail,
+					name: currentUserNam
                 })
             });
 

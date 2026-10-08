@@ -253,6 +253,32 @@
             transform: scale(1);
         }
 
+        /* Nút Tìm Kiếm (Nằm trên nút Thùng rác) */
+        #search-btn {
+            position: absolute;
+            right: 16px;
+            top: -96px; /* Đặt cao hơn nút thùng rác 50px */
+            background-color: #fff;
+            border: 1px solid #d6d3d1;
+            color: #78716c;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+            z-index: 50;
+            text-decoration: none; /* Vì đây là thẻ <a> nên cần bỏ gạch chân mặc định */
+        }
+        #search-btn:hover {
+            background-color: #f5f5f4;
+            color: #92400e;
+            border-color: #fde68a;
+        }
+
         /* Nút công tắc Thùng rác (nằm trên input) */
         #toggle-delete-mode-btn {
             position: absolute;
@@ -441,6 +467,9 @@
         <div id="chat-messages" class="flex-1 p-4 md:p-6 overflow-y-auto bg-stone-50"></div>
 
         <div class="p-4 bg-white border-t border-stone-200 shadow-inner flex-shrink-0 relative">
+			<a href="https://blogs.pmtl.site/tim-kiem/" target="_blank" id="search-btn" title="Tìm kiếm khai thị">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            </a>
             <button id="toggle-delete-mode-btn" title="Bật/tắt chế độ xóa tin nhắn" style="display: none;">
                 <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
             </button>

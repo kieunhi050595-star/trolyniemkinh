@@ -77,7 +77,8 @@ const io = new Server(server, { cors: { origin: "*" } });
 
 const pendingRequests = new Map();
 const socketToMsgId = new Map();
-const activeUsers = new Map(); // LƯU TRỮ ĐỊNH TUYẾN UID
+const activeUsers = new Map(); 
+let isPopupEnabled = true;
 
 // --- BỘ DỌN RÁC CHỐNG TRÀN RAM ---
 setInterval(() => {
@@ -101,6 +102,7 @@ io.on('connection', (socket) => {
     const userIp = rawIp.split(',')[0].trim(); 
     socket.userIp = userIp; 
     trackNewUser(userIp); 
+	socket.emit('popup_status', isPopupEnabled);
 
     socket.on('user_login', (uid) => {
         if (uid) {
@@ -438,6 +440,30 @@ app.post('/api/telegram-webhook', async (req, res) => {
                 parse_mode: 'HTML'
             });
             return res.sendStatus(200);
+        }
+
+		if (message.text) {
+            const textCmd = message.text.trim().toLowerCase();
+            if (textCmd === '/popup off') {
+                isPopupEnabled = false;
+                io.emit('popup_status', false); // Lập tức ra lệnh tắt trên toàn bộ web khách
+                await axios.post(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`, {
+                    chat_id: message.chat.id,
+                    text: `🛑 Đã <b>TẮT</b> Bảng tin Popup trên toàn hệ thống!`,
+                    parse_mode: 'HTML'
+                });
+                return res.sendStatus(200);
+            }
+            if (textCmd === '/popup on') {
+                isPopupEnabled = true;
+                io.emit('popup_status', true); // Lập tức ra lệnh bật trên toàn bộ web khách
+                await axios.post(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`, {
+                    chat_id: message.chat.id,
+                    text: `✅ Đã <b>BẬT</b> Bảng tin Popup trên toàn hệ thống!`,
+                    parse_mode: 'HTML'
+                });
+                return res.sendStatus(200);
+            }
         }
 
         if (message.reply_to_message) {

@@ -437,10 +437,10 @@
         </div>
     </div>
 	<!-- ========================================== -->
-    <!-- POPUP TÌM KIẾM NHANH BẰNG IFRAME           -->
+    <!-- POPUP TÌM KIẾM NHANH BẰNG IFRAME (TỐI ƯU)  -->
     <!-- ========================================== -->
-    <div id="search-overlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.6); z-index: 100000; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; backdrop-filter: blur(3px); transition: opacity 0.3s ease, visibility 0.3s ease; will-change: opacity, visibility;">
-        <div id="search-content-box" style="background-color: #ffffff; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.3); width: 92%; max-width: 600px; height: 80vh; display: flex; flex-direction: column; transform: scale(0.95); transition: transform 0.3s ease; overflow: hidden; will-change: transform;">
+    <div id="search-overlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.7); z-index: 100000; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: opacity 0.2s ease, visibility 0.2s ease;">
+        <div id="search-content-box" style="background-color: #ffffff; border-radius: 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3); width: 92%; max-width: 600px; height: 80vh; display: flex; flex-direction: column; overflow: hidden;">
             <!-- Tiêu đề -->
             <div style="padding: 14px 16px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
                 <h2 style="font-family: 'Playfair Display', serif; font-size: 18px; font-weight: bold; color: #0f172a; margin: 0; display: flex; align-items: center; gap: 8px;">
@@ -453,9 +453,10 @@
                 </button>
             </div>
             <!-- Nội dung nhúng trang web -->
-            <div style="flex: 1; width: 100%; height: 100%; position: relative;">
+            <div style="flex: 1; width: 100%; height: 100%; position: relative; overflow-y: auto; -webkit-overflow-scrolling: touch;">
                 <div id="search-loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #9ca3af; font-weight: bold;">Đang tải trang tìm kiếm...</div>
-                <iframe id="search-iframe" src="" style="width: 100%; height: 100%; border: none; position: relative; z-index: 10; background: #fff;" onload="document.getElementById('search-loading').style.display='none'"></iframe>
+                <!-- Thuộc tính loading="lazy" giúp giảm tải -->
+                <iframe id="search-iframe" loading="lazy" src="" style="width: 100%; height: 100%; border: none; position: relative; z-index: 10; background: #fff; pointer-events: none;" onload="document.getElementById('search-loading').style.display='none'; this.style.pointerEvents='auto';"></iframe>
             </div>
         </div>
     </div>
@@ -1025,28 +1026,26 @@
         const searchBox = document.getElementById('search-content-box');
         const searchIframe = document.getElementById('search-iframe');
 
-        // Lệnh 1: Bấm nút kính lúp để trượt popup ra
+        // Lệnh 1: Bấm nút kính lúp để mở popup
         document.getElementById('search-btn').addEventListener('click', (e) => {
             e.preventDefault();
             
-            // 1. Bung hiệu ứng popup ra trước cho mượt
             searchOverlay.style.opacity = '1';
             searchOverlay.style.visibility = 'visible';
-            searchBox.style.transform = 'scale(1)';
-
-            // 2. Chờ đúng 0.3s (300ms) để animation chạy xong hoàn toàn rồi mới load Iframe
+            
+            // Đợi popup hiện rõ (200ms) rồi mới nạp iframe để tránh nghẽn luồng xử lý
             setTimeout(() => {
                 if (!searchIframe.src || searchIframe.src === window.location.href) {
                     searchIframe.src = "https://blogs.pmtl.site/tim-kiem/";
                 }
-            }, 300);
+            }, 200);
         });
 
         // Hàm chung để đóng popup lại
         function closeSearchPopup() {
             searchOverlay.style.opacity = '0';
             searchOverlay.style.visibility = 'hidden';
-            searchBox.style.transform = 'scale(0.95)';
+            // Không cần xử lý transform: scale(0.95) nữa
         }
 
         // Lệnh 2: Đóng popup khi bấm nút X 

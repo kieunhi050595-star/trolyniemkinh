@@ -304,36 +304,32 @@
             box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.2);
         }
 
-        /* CSS cho Popup Xác Nhận (Đồng bộ với Bảng Tin) */
+        /* ========================================== */
+        /* CSS cho Popup Xác Nhận (Đã tối ưu chống lag) */
+        /* ========================================== */
         #delete-confirm-overlay {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background-color: rgba(0, 0, 0, 0.6);
+            background-color: rgba(0, 0, 0, 0.7); /* Làm nền tối hơn một chút để bù cho việc bỏ hiệu ứng mờ */
             z-index: 100000;
             display: flex;
             align-items: center;
             justify-content: center;
             opacity: 0;
             visibility: hidden;
-            backdrop-filter: blur(3px);
-            transition: all 0.3s ease;
+            transition: opacity 0.2s ease, visibility 0.2s ease; /* Chỉ tạo hiệu ứng mờ dần cho nhẹ máy */
         }
         #delete-confirm-overlay.show { opacity: 1; visibility: visible; }
+        
         #delete-confirm-box {
             background-color: #ffffff;
             border-radius: 16px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
             width: 90%;
             max-width: 360px;
             display: flex;
             flex-direction: column;
-            transform: scale(0.95);
-            transition: transform 0.3s ease;
             overflow: hidden;
-        }
-        #delete-confirm-overlay.show #delete-confirm-box { transform: scale(1); }
-        @media (hover: none) {
-            .delete-msg-btn { opacity: 0.8; } /* Trên điện thoại luôn hiện mờ mờ */
         }
 
 		/* ========================================== */

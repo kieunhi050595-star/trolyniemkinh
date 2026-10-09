@@ -80,6 +80,24 @@ const socketToMsgId = new Map();
 const activeUsers = new Map(); 
 let isPopupEnabled = true;
 
+// --- HÀM ĐỒNG BỘ TRẠNG THÁI POPUP TỪ FIREBASE ---
+async function loadPopupStatus() {
+    try {
+        const doc = await firestore.collection('settings').doc('system').get();
+        if (doc.exists) {
+            isPopupEnabled = doc.data().isPopupEnabled ?? true;
+        } else {
+            // Nếu chưa có, tạo cấu hình mặc định trong DB
+            await firestore.collection('settings').doc('system').set({ isPopupEnabled: true });
+        }
+        console.log("✅ Trạng thái Popup hiện tại:", isPopupEnabled ? "BẬT" : "TẮT");
+    } catch (e) {
+        console.error("❌ Lỗi tải cấu hình popup từ Firebase:", e.message);
+    }
+}
+// Khởi chạy lúc server start
+loadPopupStatus();
+
 // --- BỘ DỌN RÁC CHỐNG TRÀN RAM ---
 setInterval(() => {
     const now = Date.now();
@@ -455,7 +473,11 @@ app.post('/api/telegram-webhook', async (req, res) => {
             const textCmd = message.text.trim().toLowerCase();
             if (textCmd === '/popupoff') {
                 isPopupEnabled = false;
-                io.emit('popup_status', false); // Lập tức ra lệnh tắt trên toàn bộ web khách
+                io.emit('popup_status', false); 
+                
+                // Lưu trạng thái vào Database
+                firestore.collection('settings').doc('system').set({ isPopupEnabled: false }, { merge: true });
+
                 await axios.post(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`, {
                     chat_id: message.chat.id,
                     text: `🛑 Đã <b>TẮT</b> Bảng tin Popup trên toàn hệ thống!`,
@@ -465,7 +487,11 @@ app.post('/api/telegram-webhook', async (req, res) => {
             }
             if (textCmd === '/popupon') {
                 isPopupEnabled = true;
-                io.emit('popup_status', true); // Lập tức ra lệnh bật trên toàn bộ web khách
+                io.emit('popup_status', true); 
+                
+                // Lưu trạng thái vào Database
+                firestore.collection('settings').doc('system').set({ isPopupEnabled: true }, { merge: true });
+
                 await axios.post(`https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage`, {
                     chat_id: message.chat.id,
                     text: `✅ Đã <b>BẬT</b> Bảng tin Popup trên toàn hệ thống!`,

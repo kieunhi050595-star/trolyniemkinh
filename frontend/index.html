@@ -16,7 +16,7 @@
     <link rel="icon" href="logo.png" type="image/png">
     <meta name="description" content="Phụng Sự Viên Ảo - Trợ lý giải đáp các thắc mắc về Pháp Môn Tâm Linh.">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://phungsuvienao.pmtl.site/"> <!-- Điền link trang web của bạn -->
+    <meta property="og:url" content="https://phungsuvienao.pmtl.site/"> 
     <meta property="og:title" content="Phụng Sự Viên Ảo - Pháp Môn Tâm Linh">
     <meta property="og:description" content="Trợ lý AI hỗ trợ giải đáp các thắc mắc về Pháp Môn Tâm Linh nhanh chóng.">
     <meta property="og:image" content="https://phungsuvienao.pmtl.site/banner.jpg"> 
@@ -27,12 +27,10 @@
     <meta name="twitter:title" content="Phụng Sự Viên Ảo - Pháp Môn Tâm Linh">
     <meta name="twitter:description" content="Trợ lý AI hỗ trợ giải đáp các thắc mắc về Pháp Môn Tâm Linh nhanh chóng.">
     <meta name="twitter:image" content="https://phungsuvienao.pmtl.site/banner.jpg">
-    <!-- =========================================================================================== -->
 
     <link href="/dist/output.css" rel="stylesheet">
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     
-    <!-- THƯ VIỆN FIREBASE -->
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
@@ -441,8 +439,8 @@
 	<!-- ========================================== -->
     <!-- POPUP TÌM KIẾM NHANH BẰNG IFRAME           -->
     <!-- ========================================== -->
-    <div id="search-overlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.6); z-index: 100000; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; backdrop-filter: blur(3px); transition: all 0.3s ease;">
-        <div id="search-content-box" style="background-color: #ffffff; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.3); width: 92%; max-width: 600px; height: 80vh; display: flex; flex-direction: column; transform: scale(0.95); transition: transform 0.3s ease; overflow: hidden;">
+    <div id="search-overlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.6); z-index: 100000; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; backdrop-filter: blur(3px); transition: opacity 0.3s ease, visibility 0.3s ease; will-change: opacity, visibility;">
+        <div id="search-content-box" style="background-color: #ffffff; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.3); width: 92%; max-width: 600px; height: 80vh; display: flex; flex-direction: column; transform: scale(0.95); transition: transform 0.3s ease; overflow: hidden; will-change: transform;">
             <!-- Tiêu đề -->
             <div style="padding: 14px 16px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
                 <h2 style="font-family: 'Playfair Display', serif; font-size: 18px; font-weight: bold; color: #0f172a; margin: 0; display: flex; align-items: center; gap: 8px;">
@@ -1030,13 +1028,18 @@
         // Lệnh 1: Bấm nút kính lúp để trượt popup ra
         document.getElementById('search-btn').addEventListener('click', (e) => {
             e.preventDefault();
-            // Gán link trang web tìm kiếm vào
-            if (!searchIframe.src || searchIframe.src === window.location.href) {
-                searchIframe.src = "https://blogs.pmtl.site/tim-kiem/";
-            }
+            
+            // 1. Bung hiệu ứng popup ra trước cho mượt
             searchOverlay.style.opacity = '1';
             searchOverlay.style.visibility = 'visible';
             searchBox.style.transform = 'scale(1)';
+
+            // 2. Chờ đúng 0.3s (300ms) để animation chạy xong hoàn toàn rồi mới load Iframe
+            setTimeout(() => {
+                if (!searchIframe.src || searchIframe.src === window.location.href) {
+                    searchIframe.src = "https://blogs.pmtl.site/tim-kiem/";
+                }
+            }, 300);
         });
 
         // Hàm chung để đóng popup lại
